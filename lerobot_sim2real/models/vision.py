@@ -1,17 +1,17 @@
 import torch
 import torch.nn as nn
 
+
 class NatureCNN(nn.Module):
     def __init__(self, sample_obs):
         super().__init__()
 
         extractors = {}
 
-        self.out_features = 0
+        self.out_features = dict(actor=0, critic=0)
         feature_size = 256
-        in_channels=sample_obs["rgb"].shape[-1]
-        image_size=(sample_obs["rgb"].shape[1], sample_obs["rgb"].shape[2])
-
+        in_channels = sample_obs["rgb"].shape[-1]
+        (sample_obs["rgb"].shape[1], sample_obs["rgb"].shape[2])
 
         # here we use a NatureCNN architecture to process images, but any architecture is permissble here
         cnn = nn.Sequential(
@@ -36,26 +36,46 @@ class NatureCNN(nn.Module):
 
         # to easily figure out the dimensions after flattening, we pass a test tensor
         with torch.no_grad():
-            n_flatten = cnn(sample_obs["rgb"].float().permute(0,3,1,2).cpu()).shape[1]
+            n_flatten = cnn(sample_obs["rgb"].float().permute(0, 3, 1, 2).cpu()).shape[
+                1
+            ]
             fc = nn.Sequential(nn.Linear(n_flatten, feature_size), nn.ReLU())
         extractors["rgb"] = nn.Sequential(cnn, fc)
-        self.out_features += feature_size
+        self.out_features["actor"] += feature_size
+        self.out_features["critic"] += feature_size
 
         if "state" in sample_obs:
             # for state data we simply pass it through a single linear layer
             state_size = sample_obs["state"].shape[-1]
             extractors["state"] = nn.Linear(state_size, 256)
-            self.out_features += 256
+            self.out_features["actor"] += 256
+            self.out_features["critic"] += 256
+        elif "actor-state" in sample_obs and "critic-state" in sample_obs:
+            actor_state_size = sample_obs["actor-state"].shape[-1]
+            extractors["actor-state"] = nn.Linear(actor_state_size, 256)
+            self.out_features["actor"] += 256
+            critic_state_size = sample_obs["critic-state"].shape[-1]
+            extractors["critic-state"] = nn.Linear(critic_state_size, 256)
+            self.out_features["critic"] += 256
 
         self.extractors = nn.ModuleDict(extractors)
 
     def forward(self, observations) -> torch.Tensor:
-        encoded_tensor_list = []
+        encoded_actor_obs = []
+        encoded_critic_obs = []
+        encoded_shared_obs = []
         # self.extractors contain nn.Modules that do all the processing.
         for key, extractor in self.extractors.items():
             obs = observations[key]
-            if key == "rgb":
-                obs = obs.float().permute(0,3,1,2)
-                obs = obs / 255
-            encoded_tensor_list.append(extractor(obs))
-        return torch.cat(encoded_tensor_list, dim=1)
+            if key == "actor-state":
+                encoded_actor_obs.append(extractor(obs))
+            elif key == "critic-state":
+                encoded_critic_obs.append(extractor(obs))
+            else:
+                if key == "rgb":
+                    obs = obs.float().permute(0, 3, 1, 2)
+                    obs = obs / 255
+                encoded_shared_obs.append(extractor(obs))
+        actor_x = torch.cat([*encoded_shared_obs, *encoded_actor_obs], dim=1)
+        critic_x = torch.cat([*encoded_shared_obs, *encoded_critic_obs], dim=1)
+        return actor_x, critic_x
