@@ -1,11 +1,12 @@
 import gymnasium as gym
+from lerobot.common.robot_devices.cameras.opencv import OpenCVCamera
 import numpy as np
 from lerobot.common.robot_devices.cameras.configs import (
     IntelRealSenseCameraConfig,
     OpenCVCameraConfig,
 )
 from lerobot.common.robot_devices.motors.configs import DynamixelMotorsBusConfig
-from lerobot.common.robot_devices.robots.configs import KochRobotConfig
+from lerobot.common.robot_devices.robots.configs import KochRobotConfig, So100RobotConfig
 from lerobot.common.robot_devices.robots.manipulator import ManipulatorRobot
 
 import mani_skill.envs.tasks.digital_twins.koch_arm.grasp_cube
@@ -16,38 +17,44 @@ from mani_skill.utils.wrappers.record import RecordEpisode
 from tqdm import tqdm
 
 def main():
-    robot_config = KochRobotConfig(
+    robot_config = So100RobotConfig(
         leader_arms={},
-        follower_arms={
-            "main": DynamixelMotorsBusConfig(
-                port="/dev/ttyACM0",
-                motors={
-                    "shoulder_pan": [1, "xl430-w250"],
-                    "shoulder_lift": [2, "xl430-w250"],
-                    "elbow_flex": [3, "xl330-m288"],
-                    "wrist_flex": [4, "xl330-m288"],
-                    "wrist_roll": [5, "xl330-m288"],
-                    "gripper": [6, "xl330-m288"],
-                },
-            ),
-        },
         cameras={
-            "base_camera": IntelRealSenseCameraConfig(
-                serial_number=146322070293,
-                fps=30,
-                width=640,
-                height=480,
-            ),
-        },
-        calibration_dir="calibration/koch",
-    )
+            "base_camera": OpenCVCameraConfig(camera_index=1, fps=30, width=640, height=480)
+        }
+        )
+    # robot_config = KochRobotConfig(
+    #     leader_arms={},
+    #     follower_arms={
+    #         "main": DynamixelMotorsBusConfig(
+    #             port="/dev/ttyACM0",
+    #             motors={
+    #                 "shoulder_pan": [1, "xl430-w250"],
+    #                 "shoulder_lift": [2, "xl430-w250"],
+    #                 "elbow_flex": [3, "xl330-m288"],
+    #                 "wrist_flex": [4, "xl330-m288"],
+    #                 "wrist_roll": [5, "xl330-m288"],
+    #                 "gripper": [6, "xl330-m288"],
+    #             },
+    #         ),
+    #     },
+    #     cameras={
+    #         "base_camera": IntelRealSenseCameraConfig(
+    #             serial_number=146322070293,
+    #             fps=30,
+    #             width=640,
+    #             height=480,
+    #         ),
+    #     },
+    #     calibration_dir="calibration/koch",
+    # )
     real_robot = ManipulatorRobot(robot_config)
 
     # max control freq for lerobot really is just 60Hz
     real_agent = LeRobotRealAgent(real_robot)
 
 
-    max_episode_steps = 200
+    max_episode_steps = 10
     sim_env = gym.make(
         "KochGraspCube-v1",
         obs_mode="rgb+segmentation",
@@ -63,6 +70,8 @@ def main():
     sim_env.print_sim_details()
     sim_obs, _ = sim_env.reset()
     real_obs, _ = real_env.reset()
+    # while True:
+    #     print(real_env.agent.qpos)
 
     for k in sim_obs.keys():
         print(
