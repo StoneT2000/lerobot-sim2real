@@ -22,7 +22,15 @@ def main():
         cameras={
             "base_camera": OpenCVCameraConfig(camera_index=1, fps=30, width=640, height=480)
         }
-        )
+        # cameras={
+        #     "base_camera": IntelRealSenseCameraConfig(
+        #         serial_number=146322070293,
+        #         fps=30,
+        #         width=640,
+        #         height=480,
+        #     )
+        # }
+    )
     # robot_config = KochRobotConfig(
     #     leader_arms={},
     #     follower_arms={
@@ -49,6 +57,7 @@ def main():
     #     calibration_dir="calibration/koch",
     # )
     real_robot = ManipulatorRobot(robot_config)
+    real_robot.connect()
 
     # max control freq for lerobot really is just 60Hz
     real_agent = LeRobotRealAgent(real_robot)
