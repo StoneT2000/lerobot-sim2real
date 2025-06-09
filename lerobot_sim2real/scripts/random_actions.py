@@ -19,17 +19,12 @@ from tqdm import tqdm
 def main():
     robot_config = So100RobotConfig(
         leader_arms={},
-        cameras={
-            "base_camera": OpenCVCameraConfig(camera_index=1, fps=30, width=640, height=480)
-        }
         # cameras={
-        #     "base_camera": IntelRealSenseCameraConfig(
-        #         serial_number=146322070293,
-        #         fps=30,
-        #         width=640,
-        #         height=480,
-        #     )
+        #     "base_camera": OpenCVCameraConfig(camera_index=1, fps=30, width=640, height=480)
         # }
+        cameras={
+            "base_camera": IntelRealSenseCameraConfig(serial_number=146322070293, fps=30, width=640, height=480)
+        }
     )
     # robot_config = KochRobotConfig(
     #     leader_arms={},
@@ -58,16 +53,15 @@ def main():
     # )
     real_robot = ManipulatorRobot(robot_config)
     real_robot.connect()
-
     # max control freq for lerobot really is just 60Hz
     real_agent = LeRobotRealAgent(real_robot)
 
 
-    max_episode_steps = 10
+    max_episode_steps = 30
     sim_env = gym.make(
-        "KochGraspCube-v1",
+        "SO100GraspCube-v1",
         obs_mode="rgb+segmentation",
-        sim_config={"sim_freq": 120, "control_freq": 15},
+        sim_config={"sim_freq": 120, "control_freq": 30},
         render_mode="sensors", # only sensors mode is supported right now for real envs, basically rendering the direct visual observations fed to policy
         max_episode_steps=max_episode_steps, # give our robot more time to try and re-try the task
     )
@@ -89,7 +83,8 @@ def main():
     pbar = tqdm(range(max_episode_steps))
     done = False
     while not done:
-        action = real_env.action_space.sample() * 0.7
+        action = real_env.action_space.sample() * 0
+        action[0] = 1
         real_obs, _, terminated, truncated, info = real_env.step(action)
         done = terminated or truncated
         pbar.update(1)
