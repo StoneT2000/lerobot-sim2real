@@ -7,8 +7,13 @@ By Xander Hinrichsen and Stone Tao
 - Place camera somewhere facing the workspace like a table
 - Place robot somewhere. Be prepared to remove it as we will need a picture of the scene without the robot for later.
 - Make sure camera can see relevant objects and where your robot might go.
-- Test the robot can be started and take a picture of the real world environment by running
-- 
+
+
+Now remove your robot off the table and place it somewhere else outside of the sight of the camera. Test the robot can be started and take a picture of the real world environment by running 
+
+```
+python lerobot_sim2real/scripts/get_real_image.py
+```
 
 ## 2: Take a picture of the real world environment without the robot
 
