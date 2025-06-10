@@ -15,43 +15,11 @@ from mani_skill.envs.sim2real_env import Sim2RealEnv
 from mani_skill.utils.wrappers.flatten import FlattenRGBDObservationWrapper
 from mani_skill.utils.wrappers.record import RecordEpisode
 from tqdm import tqdm
+from lerobot_sim2real.config.real_robot import create_real_robot
+
 
 def main():
-    robot_config = So100RobotConfig(
-        leader_arms={},
-        # cameras={
-        #     "base_camera": OpenCVCameraConfig(camera_index=1, fps=30, width=640, height=480)
-        # }
-        cameras={
-            "base_camera": IntelRealSenseCameraConfig(serial_number=146322070293, fps=30, width=640, height=480)
-        }
-    )
-    # robot_config = KochRobotConfig(
-    #     leader_arms={},
-    #     follower_arms={
-    #         "main": DynamixelMotorsBusConfig(
-    #             port="/dev/ttyACM0",
-    #             motors={
-    #                 "shoulder_pan": [1, "xl430-w250"],
-    #                 "shoulder_lift": [2, "xl430-w250"],
-    #                 "elbow_flex": [3, "xl330-m288"],
-    #                 "wrist_flex": [4, "xl330-m288"],
-    #                 "wrist_roll": [5, "xl330-m288"],
-    #                 "gripper": [6, "xl330-m288"],
-    #             },
-    #         ),
-    #     },
-    #     cameras={
-    #         "base_camera": IntelRealSenseCameraConfig(
-    #             serial_number=146322070293,
-    #             fps=30,
-    #             width=640,
-    #             height=480,
-    #         ),
-    #     },
-    #     calibration_dir="calibration/koch",
-    # )
-    real_robot = ManipulatorRobot(robot_config)
+    real_robot = create_real_robot(uid="s100")
     real_robot.connect()
     # max control freq for lerobot really is just 60Hz
     real_agent = LeRobotRealAgent(real_robot)
@@ -74,6 +42,8 @@ def main():
     sim_obs, _ = sim_env.reset()
     real_obs, _ = real_env.reset()
     # while True:
+    # while True:
+    #     sim_env.render_human()
     #     print(real_env.agent.qpos)
 
     for k in sim_obs.keys():
@@ -83,8 +53,8 @@ def main():
     pbar = tqdm(range(max_episode_steps))
     done = False
     while not done:
-        action = real_env.action_space.sample() * 0
-        action[0] = 1
+        action = real_env.action_space.sample()
+        # action[0] = 1
         real_obs, _, terminated, truncated, info = real_env.step(action)
         done = terminated or truncated
         pbar.update(1)
