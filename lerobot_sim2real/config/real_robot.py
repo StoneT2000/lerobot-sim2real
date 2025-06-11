@@ -1,23 +1,22 @@
+from pathlib import Path
 import gymnasium as gym
-from lerobot.common.robot_devices.cameras.opencv import OpenCVCamera
+from lerobot.common.robots.robot import Robot
+from lerobot.common.robots.so100_follower.config_so100_follower import SO100FollowerConfig
+from lerobot.common.robots.utils import make_robot_from_config
 import numpy as np
-from lerobot.common.robot_devices.cameras.configs import (
-    IntelRealSenseCameraConfig,
-    OpenCVCameraConfig,
-)
-from lerobot.common.robot_devices.robots.configs import So100RobotConfig
-from lerobot.common.robot_devices.robots.manipulator import ManipulatorRobot
+from lerobot.common.cameras.realsense.configuration_realsense import RealSenseCameraConfig
 
-def create_real_robot(uid: str = "s100") -> ManipulatorRobot:
+def create_real_robot(uid: str = "s100") -> Robot:
     if uid == "s100":
-        robot_config = So100RobotConfig(
-            leader_arms={},
+        robot_config = SO100FollowerConfig(
+            port="/dev/ttyACM0",
             # cameras={
             #     "base_camera": OpenCVCameraConfig(camera_index=1, fps=30, width=640, height=480)
             # }
             cameras={
-                "base_camera": IntelRealSenseCameraConfig(serial_number=146322070293, fps=30, width=640, height=480)
-            }
+                "base_camera": RealSenseCameraConfig(serial_number_or_name="146322070293", fps=30, width=640, height=480)
+            },
+            id="stone_home",
         )
-        real_robot = ManipulatorRobot(robot_config)
+        real_robot = make_robot_from_config(robot_config)
         return real_robot

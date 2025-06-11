@@ -15,6 +15,14 @@ Now remove your robot off the table and place it somewhere else outside of the s
 python lerobot_sim2real/scripts/get_real_image.py
 ```
 
+```
+python -m lerobot.calibrate \
+    --robot.type=so100_follower \
+    --robot.port=/dev/ttyACM0 \
+    --robot.id=stone_home
+```
+
+
 ## 2: Take a picture of the real world environment without the robot
 
 ## 3: 

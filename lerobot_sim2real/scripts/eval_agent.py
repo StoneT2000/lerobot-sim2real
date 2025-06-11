@@ -10,6 +10,7 @@ from lerobot.common.robot_devices.robots.configs import KochRobotConfig
 from lerobot.common.robot_devices.robots.manipulator import ManipulatorRobot
 import torch
 import tyro
+from lerobot_sim2real.config.real_robot import create_real_robot
 from lerobot_sim2real.rl.agents.actor_critic import ActorCritic
 from lerobot_sim2real.rl.buffer.dict_array import DictArray
 from lerobot_sim2real.models.vision import NatureCNN
@@ -27,42 +28,17 @@ class Args:
     """path to a pretrained checkpoint file to load agent weights from for evaluation. If None then a random agent will be used"""
 
 def main(args: Args):
-    robot_config = KochRobotConfig(
-        leader_arms={},
-        follower_arms={
-            "main": DynamixelMotorsBusConfig(
-                port="/dev/ttyACM0",
-                motors={
-                    "shoulder_pan": [1, "xl430-w250"],
-                    "shoulder_lift": [2, "xl430-w250"],
-                    "elbow_flex": [3, "xl330-m288"],
-                    "wrist_flex": [4, "xl330-m288"],
-                    "wrist_roll": [5, "xl330-m288"],
-                    "gripper": [6, "xl330-m288"],
-                },
-            ),
-        },
-        cameras={
-            "base_camera": IntelRealSenseCameraConfig(
-                serial_number=146322070293,
-                fps=30,
-                width=640,
-                height=480,
-            ),
-        },
-        calibration_dir="calibration/koch",
-    )
-    real_robot = ManipulatorRobot(robot_config)
-
+    real_robot = create_real_robot(uid="s100")
+    real_robot.connect()
     # max control freq for lerobot really is just 60Hz
     real_agent = LeRobotRealAgent(real_robot)
 
 
-    max_episode_steps = 200
+    max_episode_steps = 10
     sim_env = gym.make(
-        "KochGraspCube-v1",
+        "SO100GraspCube-v1",
         obs_mode="rgb+segmentation",
-        sim_config={"sim_freq": 120, "control_freq": 15},
+        sim_config={"sim_freq": 120, "control_freq": 30},
         render_mode="sensors", # only sensors mode is supported right now for real envs, basically rendering the direct visual observations fed to policy
         max_episode_steps=max_episode_steps, # give our robot more time to try and re-try the task
     )
@@ -84,6 +60,7 @@ def main(args: Args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     agent = ActorCritic(sim_env, sample_obs=real_obs, feature_net=NatureCNN(real_obs))
     if args.checkpoint:
+        import ipdb; ipdb.set_trace()
         agent.load_state_dict(torch.load(args.checkpoint, map_location=device))
         print(f"Loaded agent from {args.checkpoint}")
     else:
@@ -93,12 +70,14 @@ def main(args: Args):
     done = False
     while not done:
         real_obs, _, terminated, truncated, info = real_env.step(agent.get_action(real_obs))
+        input("enter")
         done = terminated or truncated
         pbar.update(1)
     sim_env.close()
-    real_agent.stop()
+    real_env.close()
 
     print("Saved video to videos/0.mp4")
 
 if __name__ == "__main__":
-    tyro.cli(main)
+    args = tyro.cli(Args)
+    main(args)
