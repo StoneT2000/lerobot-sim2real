@@ -123,12 +123,7 @@ def main(args: Args):
         obs_mode="rgb+segmentation",
         sim_config={"sim_freq": 120, "control_freq": 30},
         render_mode="sensors",
-        # greenscreen_overlay_path=args.greenscreen_overlay_path,
-        # base_camera_settings=dict(
-        #     pos=[0.6700, 0.36, 0.3000],
-        #     fov=0.61,
-        #     target=[0.185, -0.14, 0.0]
-        # ),
+        greenscreen_overlay_path=args.greenscreen_overlay_path,
         base_camera_settings=dict(
             pos=[0.69, 0.37, 0.28],
             fov=0.8256,
