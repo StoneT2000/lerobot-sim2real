@@ -124,10 +124,15 @@ def main(args: Args):
         sim_config={"sim_freq": 120, "control_freq": 30},
         render_mode="sensors",
         # greenscreen_overlay_path=args.greenscreen_overlay_path,
+        # base_camera_settings=dict(
+        #     pos=[0.6700, 0.36, 0.3000],
+        #     fov=0.61,
+        #     target=[0.185, -0.14, 0.0]
+        # ),
         base_camera_settings=dict(
-            pos=[0.6800, 0.3500, 0.2861],
-            fov=0.61,
-            target=[0.185, -0.135, 0.03]
+            pos=[0.69, 0.37, 0.28],
+            fov=0.8256,
+            target=[0.185, -0.15, 0.0]
         ),
         sensor_configs=dict(width=512, height=512)
     )

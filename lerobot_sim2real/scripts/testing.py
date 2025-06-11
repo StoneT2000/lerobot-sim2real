@@ -1,4 +1,5 @@
 
+from lerobot.common.motors.motors_bus import MotorNormMode
 import numpy as np
 import torch
 from lerobot_sim2real.config import real_robot
@@ -7,6 +8,7 @@ from lerobot_sim2real.config import real_robot
 if __name__ == "__main__":
     real_robot = real_robot.create_real_robot(uid="s100")
     real_robot.connect()
+    real_robot.bus.motors["gripper"].norm_mode = MotorNormMode.DEGREES
     real_robot.bus.disable_torque()
 
     while True:
