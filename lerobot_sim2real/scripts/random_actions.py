@@ -18,7 +18,7 @@ def main():
     sim_env = gym.make(
         "SO100GraspCube-v1",
         obs_mode="rgb+segmentation",
-        sim_config={"sim_freq": 120, "control_freq": 30},
+        sim_config={"sim_freq": 120, "control_freq": 15},
         render_mode="sensors", # only sensors mode is supported right now for real envs, basically rendering the direct visual observations fed to policy
         max_episode_steps=max_episode_steps, # give our robot more time to try and re-try the task
     )
@@ -30,6 +30,7 @@ def main():
     sim_env.print_sim_details()
     sim_obs, _ = sim_env.reset()
     real_obs, _ = real_env.reset()
+    print(real_env.agent.qpos)
 
     for k in sim_obs.keys():
         print(
@@ -42,8 +43,10 @@ def main():
         real_obs, _, terminated, truncated, info = real_env.step(action)
         done = terminated or truncated
         pbar.update(1)
+
+    real_agent.reset(sim_env.agent.keyframes["rest"].qpos)
     sim_env.close()
-    real_agent.stop()
+    real_env.close()
 
     print("Saved video to videos/0.mp4")
 

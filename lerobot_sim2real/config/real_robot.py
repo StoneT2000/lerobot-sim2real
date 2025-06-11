@@ -10,6 +10,7 @@ def create_real_robot(uid: str = "s100") -> Robot:
     if uid == "s100":
         robot_config = SO100FollowerConfig(
             port="/dev/ttyACM0",
+            use_degrees=True,
             # cameras={
             #     "base_camera": OpenCVCameraConfig(camera_index=1, fps=30, width=640, height=480)
             # }
