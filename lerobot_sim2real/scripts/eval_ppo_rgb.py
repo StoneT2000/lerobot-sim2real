@@ -13,8 +13,7 @@ import tyro
 import signal
 import sys
 from lerobot_sim2real.config.real_robot import create_real_robot
-from lerobot_sim2real.rl.agents.actor_critic import ActorCritic
-from lerobot_sim2real.models.vision import NatureCNN
+from lerobot_sim2real.rl.ppo_rgb import Agent
 
 from mani_skill.agents.robots.lerobot.manipulator import LeRobotRealAgent
 from mani_skill.envs.sim2real_env import Sim2RealEnv
@@ -44,8 +43,7 @@ class Args:
     """seed of the experiment"""
     record_dir: Optional[str] = None
     """Directory to save recordings of the camera captured images. If none no recordings are saved"""
-
-    control_freq: Optional[int] = None
+    control_freq: Optional[int] = 15
     """The control frequency of the real robot. For safety reasons we recommend setting this to 15Hz or lower as we permit the RL agent to take larger actions to move faster. If this is none, it will use the same control frequency the sim env uses."""
 
 def overlay_envs(sim_env, real_env):
@@ -85,12 +83,6 @@ def main(args: Args):
         render_mode="sensors", # only sensors mode is supported right now for real envs, basically rendering the direct visual observations fed to policy
         max_episode_steps=args.max_episode_steps, # give our robot more time to try and re-try the task
         domain_randomization=False,
-        base_camera_settings=dict(
-            pos=[0.69, 0.37, 0.28],
-            fov=0.8256,
-            target=[0.185, -0.15, 0.0]
-        ),
-        greenscreen_overlay_path="greenscreen_background_1.png",
     )
     if args.control_freq is not None:
         env_kwargs["sim_config"] = {"control_freq": args.control_freq}
@@ -138,7 +130,7 @@ def main(args: Args):
 
     ### Load our checkpoint ###
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    agent = ActorCritic(sim_env, sample_obs=real_obs, feature_net=NatureCNN(real_obs))
+    agent = Agent(sim_env, sample_obs=real_obs)
     if args.checkpoint:
         agent.load_state_dict(torch.load(args.checkpoint, map_location=device))
         print(f"Loaded agent from {args.checkpoint}")

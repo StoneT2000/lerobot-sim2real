@@ -1,9 +1,13 @@
-# docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/ppo/#ppo_continuous_actionpy
+"""CleanRL Style PPO implementation for visual RL in ManiSkill. Taken from https://github.com/haosulab/ManiSkill/blob/main/examples/baselines/ppo
+
+Only modification is Args is renamed to PPOArgs, the main function is put inside a train function for cross-module use, and we provide support to modify env kwargs
+"""
 from collections import defaultdict
+import json
 import os
 import random
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional
 
 import gymnasium as gym
@@ -54,6 +58,8 @@ class PPOArgs:
     # Algorithm specific arguments
     env_id: str = "PickCube-v1"
     """the id of the environment"""
+    env_kwargs: dict = field(default_factory=dict)
+    """extra environment kwargs to pass to the environment"""
     include_state: bool = True
     """whether to include state information in observations"""
     total_timesteps: int = 10000000
@@ -307,15 +313,11 @@ def train(args: PPOArgs):
     # env setup
     env_kwargs = dict(
         obs_mode="rgb+segmentation", render_mode=args.render_mode, sim_backend="physx_cuda",
-        base_camera_settings=dict(
-            pos=[0.69, 0.37, 0.28],
-            fov=0.8256,
-            target=[0.185, -0.15, 0.0]
-        ),
-        greenscreen_overlay_path="backgrounds/greenscreen_background_1.png",
     )
     if args.control_mode is not None:
         env_kwargs["control_mode"] = args.control_mode
+    env_kwargs.update(args.env_kwargs)
+
     eval_envs = gym.make(args.env_id, num_envs=args.num_eval_envs, reconfiguration_freq=args.eval_reconfiguration_freq, **env_kwargs)
     envs = gym.make(args.env_id, num_envs=args.num_envs if not args.evaluate else 1, reconfiguration_freq=args.reconfiguration_freq, **env_kwargs)
 
