@@ -1,4 +1,6 @@
+import json
 import time
+from typing import Optional
 import gymnasium as gym
 import torch
 from mani_skill.utils.wrappers.flatten import FlattenRGBDObservationWrapper
@@ -16,7 +18,9 @@ import matplotlib.pyplot as plt
 @dataclass
 class Args:
     env_id: str = "SO100GraspCube-v1"
-    greenscreen_overlay_path: str = "greenscreen_background.png"
+    """The environment id to train on"""
+    env_kwargs_json_path: Optional[str] = None
+    """Path to a json file containing additional environment kwargs to use."""
 
 def overlay_envs(sim_env, real_env):
     """
@@ -118,18 +122,18 @@ def main(args: Args):
     real_robot.connect()
     real_agent = LeRobotRealAgent(real_robot)
 
+    env_kwargs = dict(
+        obs_mode="rgb+segmentation",
+        render_mode="sensors",
+        # use larger camera resolution to make it easier to align. In training we won't use this however
+        sensor_configs=dict(width=512, height=512)
+    )
+    if args.env_kwargs_json_path is not None:
+        with open(args.env_kwargs_json_path, "r") as f:
+            env_kwargs.update(json.load(f))
     sim_env = gym.make(
         args.env_id,
-        obs_mode="rgb+segmentation",
-        sim_config={"sim_freq": 120, "control_freq": 30},
-        render_mode="sensors",
-        greenscreen_overlay_path=args.greenscreen_overlay_path,
-        base_camera_settings=dict(
-            pos=[0.69, 0.37, 0.28],
-            fov=0.8256,
-            target=[0.185, -0.15, 0.0]
-        ),
-        sensor_configs=dict(width=512, height=512)
+        **env_kwargs,
     )
     sim_env = FlattenRGBDObservationWrapper(sim_env)
     real_env = Sim2RealEnv(sim_env=sim_env, agent=real_agent, obs_mode="rgb")
@@ -149,14 +153,7 @@ def main(args: Args):
     fig.canvas.mpl_connect("key_press_event", on_key_press)
     fig.canvas.mpl_connect("key_release_event", on_key_release)
 
-    # if args.output_photo_path is not None:
-    #     path, ext = args.output_photo_path.split(".")
-    #     real_obs = real_env.get_obs()["sensor_data"]
-    #     for i, name in enumerate(real_obs):
-    #         plt.imsave(path + "_" + name + "." + ext, real_obs[name]["rgb"][0].numpy())
-    # else:
-        # obs, _ = real_env.reset()
-    print("Camera alignment: Move real camera to align, close figure to exit")
+    print("Camera alignment: Move real camera to align with the sim camera, close figure to exit")
     while True:
         overlaid_imgs = overlay_envs(sim_env, real_env)
         im.set_data(overlaid_imgs)

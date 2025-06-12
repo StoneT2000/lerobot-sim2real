@@ -14,6 +14,5 @@ videos/
 .DS_Store
 
 
-greenscreen_background.png
-
+wandb/
 runs/

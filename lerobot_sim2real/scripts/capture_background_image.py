@@ -15,6 +15,8 @@ class Args:
     """The environment id to train on"""
     env_kwargs_json_path: Optional[str] = None
     """Path to a json file containing additional environment kwargs to use."""
+    out: str
+    """Path to save the greenscreen image to"""
 
 def main(args: Args):
     # TODO (can we avoid activating the robot?)
@@ -39,8 +41,8 @@ def main(args: Args):
     bgr_img = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR)
     
     # Save the image
-    cv2.imwrite("greenscreen_background.png", bgr_img)
-    print("Saved image to greenscreen_background.png")
+    cv2.imwrite(args.out, bgr_img)
+    print(f"Saved image to {args.out}")
 
     real_env.close()
     sim_env.close()
