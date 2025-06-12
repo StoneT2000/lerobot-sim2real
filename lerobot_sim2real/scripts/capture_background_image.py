@@ -1,3 +1,4 @@
+from typing import Optional
 import gymnasium as gym
 from mani_skill.utils.wrappers.flatten import FlattenRGBDObservationWrapper
 from lerobot_sim2real.config.real_robot import create_real_robot
@@ -5,16 +6,25 @@ from mani_skill.agents.robots.lerobot.manipulator import LeRobotRealAgent
 from mani_skill.envs.sim2real_env import Sim2RealEnv
 import cv2
 import numpy as np
+import tyro
+from dataclasses import dataclass
 
-def main(env_id: str = "SO100GraspCube-v1"):
+@dataclass
+class Args:
+    env_id: str
+    """The environment id to train on"""
+    env_kwargs_json_path: Optional[str] = None
+    """Path to a json file containing additional environment kwargs to use."""
+
+def main(args: Args):
+    # TODO (can we avoid activating the robot?)
     real_robot = create_real_robot(uid="s100")
     real_robot.connect()
     real_agent = LeRobotRealAgent(real_robot)
 
     sim_env = gym.make(
-        env_id,
+        args.env_id,
         obs_mode="rgb+segmentation",
-        sim_config={"sim_freq": 120, "control_freq": 30},
         render_mode="sensors",
     )
     sim_env = FlattenRGBDObservationWrapper(sim_env)
@@ -36,4 +46,5 @@ def main(env_id: str = "SO100GraspCube-v1"):
     sim_env.close()
 
 if __name__ == "__main__":
-    main()
+    args = tyro.cli(Args)
+    main(args)
