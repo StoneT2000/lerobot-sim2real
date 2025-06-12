@@ -1,0 +1,8 @@
+{
+  "base_camera_settings": {
+      "pos": [0.69, 0.37, 0.28],
+      "fov": 0.8256,
+      "target": [0.185, -0.15, 0.0]
+  },
+  "greenscreen_overlay_path": "backgrounds/greenscreen_background_1.png"
+}
