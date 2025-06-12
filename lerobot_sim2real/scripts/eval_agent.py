@@ -45,11 +45,11 @@ def main(args: Args):
     real_agent = LeRobotRealAgent(real_robot)
 
 
-    max_episode_steps = 200
+    max_episode_steps = 100
     sim_env = gym.make(
         "SO100GraspCube-v1",
         obs_mode="rgb+segmentation",
-        sim_config={"sim_freq": 120, "control_freq": 30},
+        sim_config={"sim_freq": 120, "control_freq": 15},
         render_mode="sensors", # only sensors mode is supported right now for real envs, basically rendering the direct visual observations fed to policy
         max_episode_steps=max_episode_steps, # give our robot more time to try and re-try the task
         base_camera_settings=dict(
@@ -58,7 +58,7 @@ def main(args: Args):
             target=[0.185, -0.15, 0.0]
         ),
         domain_randomization=False,
-        greenscreen_overlay_path="greenscreen_background.png",
+        greenscreen_overlay_path="greenscreen_background_1.png",
     )
     # you can apply most wrappers freely to the sim_env and the real env will use them
     sim_env = FlattenRGBDObservationWrapper(sim_env)
@@ -82,49 +82,59 @@ def main(args: Args):
         print(f"Loaded agent from {args.checkpoint}")
     else:
         print("No checkpoint provided, using random agent")
+    agent.to(device)
 
     pbar = tqdm(range(max_episode_steps))
     done = False
+    use_sim_obs = False
+    DEBUG = False
+    if DEBUG:
 
     # for plotting robot camera reads
-    fig = plt.figure()
-    ax = fig.add_subplot(3, 1, 1)
-    ax2 = fig.add_subplot(3, 1, 2)
-    ax3 = fig.add_subplot(3, 1, 3)
+        fig = plt.figure()
+        ax = fig.add_subplot(3, 1, 1)
+        ax2 = fig.add_subplot(3, 1, 2)
+        ax3 = fig.add_subplot(3, 1, 3)
 
-    # Disable all default key bindings
-    fig.canvas.mpl_disconnect(fig.canvas.manager.key_press_handler_id)
-    fig.canvas.manager.key_press_handler_id = None
+        # Disable all default key bindings
+        fig.canvas.mpl_disconnect(fig.canvas.manager.key_press_handler_id)
+        fig.canvas.manager.key_press_handler_id = None
 
-    use_sim_obs = False
 
-    # initialize the plot
-    overlaid_imgs, real_imgs, sim_imgs = overlay_envs(sim_env, real_env)
-    im = ax.imshow(overlaid_imgs)
-    im2 = ax2.imshow(sim_imgs)
-    im3 = ax3.imshow(real_imgs)
-    while not done:
-        agent_obs = real_obs
-        if use_sim_obs:
-            agent_obs = FlattenRGBDObservationWrapper.observation(sim_env, sim_env.get_obs())
-            agent_obs = {k: v.cpu() for k, v in agent_obs.items()}
-            
-        action = agent.get_action(agent_obs)
-        if use_sim_obs:
-            real_obs, _, terminated, truncated, info = sim_env.step(action)
-        real_obs, _, terminated, truncated, info = real_env.step(action)
-        input("enter")
+        # initialize the plot
         overlaid_imgs, real_imgs, sim_imgs = overlay_envs(sim_env, real_env)
-        done = terminated or truncated
-        # sim_env.render_human()
-        im.set_data(overlaid_imgs)
-        im2.set_data(sim_imgs)
-        im3.set_data(real_imgs)
-        # Redraw the plot
-        fig.canvas.draw()
-        fig.show()
-        fig.canvas.flush_events()
-        pbar.update(1)
+        im = ax.imshow(overlaid_imgs)
+        im2 = ax2.imshow(sim_imgs)
+        im3 = ax3.imshow(real_imgs)
+
+    episode_count = 0
+    while True:
+        print(f"Evaluation Episode {episode_count}")
+        for _ in range(max_episode_steps):
+            agent_obs = real_obs
+            if use_sim_obs:
+                agent_obs = FlattenRGBDObservationWrapper.observation(sim_env, sim_env.get_obs())
+                # agent_obs = {k: v.cpu() for k, v in agent_obs.items()}
+            agent_obs = {k: v.to(device) for k, v in agent_obs.items()}
+            action = agent.get_action(agent_obs)
+            if use_sim_obs:
+                real_obs, _, terminated, truncated, info = sim_env.step(action)
+            real_obs, _, terminated, truncated, info = real_env.step(action.cpu().numpy())
+            
+            if DEBUG:
+                input("enter")
+                overlaid_imgs, real_imgs, sim_imgs = overlay_envs(sim_env, real_env)
+                done = terminated or truncated
+                # sim_env.render_human()
+                im.set_data(overlaid_imgs)
+                im2.set_data(sim_imgs)
+                im3.set_data(real_imgs)
+                # Redraw the plot
+                fig.canvas.draw()
+                fig.show()
+                fig.canvas.flush_events()
+            pbar.update(1)
+        real_env.reset()
     sim_env.close()
     real_env.close()
 
