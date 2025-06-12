@@ -3,6 +3,7 @@ This script is used to evaluate a random or RL trained agent on a real robot usi
 """
 
 from dataclasses import dataclass
+import json
 import random
 from typing import Optional
 import gymnasium as gym
@@ -44,6 +45,9 @@ class Args:
     record_dir: Optional[str] = None
     """Directory to save recordings of the camera captured images. If none no recordings are saved"""
 
+    control_freq: Optional[int] = None
+    """The control frequency of the real robot. For safety reasons we recommend setting this to 15Hz or lower as we permit the RL agent to take larger actions to move faster. If this is none, it will use the same control frequency the sim env uses."""
+
 def overlay_envs(sim_env, real_env):
     """
     Overlays sim_env observtions onto real_env observations
@@ -75,27 +79,37 @@ def main(args: Args):
     real_robot.connect()
     real_agent = LeRobotRealAgent(real_robot)
 
-
-    sim_env = gym.make(
-        args.env_id,
+    ### Setup the sim environment to make various checks for sim2real alignment and debugging possible ###
+    env_kwargs = dict(
         obs_mode="rgb+segmentation",
-        sim_config={"sim_freq": 120, "control_freq": 15},
         render_mode="sensors", # only sensors mode is supported right now for real envs, basically rendering the direct visual observations fed to policy
         max_episode_steps=args.max_episode_steps, # give our robot more time to try and re-try the task
+        domain_randomization=False,
         base_camera_settings=dict(
             pos=[0.69, 0.37, 0.28],
             fov=0.8256,
             target=[0.185, -0.15, 0.0]
         ),
-        domain_randomization=False,
         greenscreen_overlay_path="greenscreen_background_1.png",
     )
-    # you can apply most wrappers freely to the sim_env and the real env will use them
+    if args.control_freq is not None:
+        env_kwargs["sim_config"] = {"control_freq": args.control_freq}
+    if args.env_kwargs_json_path is not None:
+        with open(args.env_kwargs_json_path, "r") as f:
+            env_kwargs.update(json.load(f))
+    
+    sim_env = gym.make(
+        args.env_id,
+        **env_kwargs
+    )
+    # you can apply most wrappers freely to the sim_env and the real_env will use them as well
     sim_env = FlattenRGBDObservationWrapper(sim_env)
     if args.record_dir is not None:
         # TODO (stao): verify this wrapper works
         sim_env = RecordEpisode(sim_env, output_dir=args.record_dir, save_trajectory=False, video_fps=sim_env.unwrapped.control_freq)
     
+    # The Sim2RealEnv class uses the sim_env to help make various checks for sim2real alignment (e.g. observation space is the same, cameras are the similar)
+    # and will always try its best to apply all wrappers you used on the sim env to the real env as well.
     real_env = Sim2RealEnv(sim_env=sim_env, agent=real_agent, obs_mode="rgb")
     # sim_env.print_sim_details()
     sim_obs, _ = sim_env.reset()
@@ -132,7 +146,6 @@ def main(args: Args):
         print("No checkpoint provided, using random agent")
     agent.to(device)
 
-    pbar = tqdm(range(max_episode_steps))
     
     ### Visualization setup for debug modes ###
     if args.debug:
@@ -156,7 +169,7 @@ def main(args: Args):
     episode_count = 0
     while args.num_episodes is None or episode_count < args.num_episodes:
         print(f"Evaluation Episode {episode_count}")
-        for _ in range(max_episode_steps):
+        for _ in tqdm(range(args.max_episode_steps)):
             agent_obs = real_obs
 
             agent_obs = {k: v.to(device) for k, v in agent_obs.items()}
@@ -174,7 +187,7 @@ def main(args: Args):
                 fig.canvas.draw()
                 fig.show()
                 fig.canvas.flush_events()
-            pbar.update(1)
+
         episode_count += 1
         real_env.reset()
     sim_env.close()
