@@ -1,8 +1,16 @@
+"""
+This script is used to evaluate a random or RL trained agent on a real robot using the LeRobot system.
+"""
+
 from dataclasses import dataclass
+import random
 from typing import Optional
 import gymnasium as gym
+import numpy as np
 import torch
 import tyro
+import signal
+import sys
 from lerobot_sim2real.config.real_robot import create_real_robot
 from lerobot_sim2real.rl.agents.actor_critic import ActorCritic
 from lerobot_sim2real.models.vision import NatureCNN
@@ -18,6 +26,24 @@ import matplotlib.pyplot as plt
 class Args:
     checkpoint: Optional[str] = None
     """path to a pretrained checkpoint file to load agent weights from for evaluation. If None then a random agent will be used"""
+    env_kwargs_json_path: Optional[str] = None
+    """path to a json file containing additional environment kwargs to use. For real world evaluation this is not needed but if you want to turn on debug mode which visualizes the sim and real envs side by side you will need this"""
+    debug: bool = False
+    """if toggled, the sim and real envs will be visualized side by side"""
+    continuous_eval: bool = True
+    """If toggled, the evaluation will run until episode ends without user input. If false, at each timestep the user will be prompted to press enter to let the robot continue"""
+    max_episode_steps: int = 100
+    """The maximum number of control steps the real robot can take before we stop the episode and reset the environment. It is recommended to set this number to be larger than the value the sim env is set to, that way you can permit the
+    robot more chances to recover from failures / solve the task."""
+    num_episodes: Optional[int] = None
+    """The number of episodes to evaluate for. If None, the evaluation will run until the user presses ctrl+c"""
+    env_id: str = "SO100GraspCube-v1"
+    """The environment id to use for evaluation. This should be the same as the environment id used for training."""
+    seed: int = 1
+    """seed of the experiment"""
+    record_dir: Optional[str] = None
+    """Directory to save recordings of the camera captured images. If none no recordings are saved"""
+
 def overlay_envs(sim_env, real_env):
     """
     Overlays sim_env observtions onto real_env observations
@@ -38,20 +64,24 @@ def overlay_envs(sim_env, real_env):
         overlaid_imgs.append(0.5 * real_imgs + 0.5 * sim_imgs)
 
     return tile_images(overlaid_imgs), real_imgs, sim_imgs
+
 def main(args: Args):
-    real_robot = create_real_robot(uid="s100")
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
+    ### Create and connect the real robot, wrap it to make it interfaceable with ManiSkill sim2real environments ###    
+    real_robot = create_real_robot(uid="so100")
     real_robot.connect()
-    # max control freq for lerobot really is just 60Hz
     real_agent = LeRobotRealAgent(real_robot)
 
 
-    max_episode_steps = 100
     sim_env = gym.make(
-        "SO100GraspCube-v1",
+        args.env_id,
         obs_mode="rgb+segmentation",
         sim_config={"sim_freq": 120, "control_freq": 15},
         render_mode="sensors", # only sensors mode is supported right now for real envs, basically rendering the direct visual observations fed to policy
-        max_episode_steps=max_episode_steps, # give our robot more time to try and re-try the task
+        max_episode_steps=args.max_episode_steps, # give our robot more time to try and re-try the task
         base_camera_settings=dict(
             pos=[0.69, 0.37, 0.28],
             fov=0.8256,
@@ -62,11 +92,13 @@ def main(args: Args):
     )
     # you can apply most wrappers freely to the sim_env and the real env will use them
     sim_env = FlattenRGBDObservationWrapper(sim_env)
-    sim_env = RecordEpisode(sim_env, output_dir="videos", save_trajectory=False, video_fps=sim_env.unwrapped.control_freq)
+    if args.record_dir is not None:
+        # TODO (stao): verify this wrapper works
+        sim_env = RecordEpisode(sim_env, output_dir=args.record_dir, save_trajectory=False, video_fps=sim_env.unwrapped.control_freq)
     
     real_env = Sim2RealEnv(sim_env=sim_env, agent=real_agent, obs_mode="rgb")
-    sim_env.print_sim_details()
-    sim_obs, _ = sim_env.reset(seed=2)
+    # sim_env.print_sim_details()
+    sim_obs, _ = sim_env.reset()
     real_obs, _ = real_env.reset()
 
     for k in sim_obs.keys():
@@ -74,7 +106,23 @@ def main(args: Args):
             f"{k}: sim_obs shape: {sim_obs[k].shape}, real_obs shape: {real_obs[k].shape}"
         )
 
-    # load agent
+    ### Safety setups. Close environments/turn off robot upon ctrl+c ###
+    def signal_handler(sig, frame):
+        print("\nCtrl+C detected. Exiting gracefully...")
+        try:
+            sim_env.close()
+        except Exception:
+            pass
+        try:
+            real_env.close()
+        except Exception:
+            pass
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+        
+
+    ### Load our checkpoint ###
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     agent = ActorCritic(sim_env, sample_obs=real_obs, feature_net=NatureCNN(real_obs))
     if args.checkpoint:
@@ -85,12 +133,9 @@ def main(args: Args):
     agent.to(device)
 
     pbar = tqdm(range(max_episode_steps))
-    done = False
-    use_sim_obs = False
-    DEBUG = False
-    if DEBUG:
-
-    # for plotting robot camera reads
+    
+    ### Visualization setup for debug modes ###
+    if args.debug:
         fig = plt.figure()
         ax = fig.add_subplot(3, 1, 1)
         ax2 = fig.add_subplot(3, 1, 2)
@@ -107,25 +152,21 @@ def main(args: Args):
         im2 = ax2.imshow(sim_imgs)
         im3 = ax3.imshow(real_imgs)
 
+    ### Main evaluation loop ###
     episode_count = 0
-    while True:
+    while args.num_episodes is None or episode_count < args.num_episodes:
         print(f"Evaluation Episode {episode_count}")
         for _ in range(max_episode_steps):
             agent_obs = real_obs
-            if use_sim_obs:
-                agent_obs = FlattenRGBDObservationWrapper.observation(sim_env, sim_env.get_obs())
-                # agent_obs = {k: v.cpu() for k, v in agent_obs.items()}
+
             agent_obs = {k: v.to(device) for k, v in agent_obs.items()}
             action = agent.get_action(agent_obs)
-            if use_sim_obs:
-                real_obs, _, terminated, truncated, info = sim_env.step(action)
+            if args.continuous_eval:
+                input("Press enter to continue to next timestep")
             real_obs, _, terminated, truncated, info = real_env.step(action.cpu().numpy())
             
-            if DEBUG:
-                input("enter")
+            if args.debug:
                 overlaid_imgs, real_imgs, sim_imgs = overlay_envs(sim_env, real_env)
-                done = terminated or truncated
-                # sim_env.render_human()
                 im.set_data(overlaid_imgs)
                 im2.set_data(sim_imgs)
                 im3.set_data(real_imgs)
@@ -134,11 +175,11 @@ def main(args: Args):
                 fig.show()
                 fig.canvas.flush_events()
             pbar.update(1)
+        episode_count += 1
         real_env.reset()
     sim_env.close()
     real_env.close()
 
-    print("Saved video to videos/0.mp4")
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
