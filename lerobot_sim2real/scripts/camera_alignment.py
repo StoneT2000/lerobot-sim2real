@@ -94,10 +94,12 @@ def update_camera(sim_env):
     elif (
         not help_message_printed
     ):  # Only print help message if it hasn't been printed yet
+        print("=== Commands for controlling sim camera ===")
         print(
-            "press: (w), (a) to move in x, (s), (d) to move in y, (up), (down) to move in z, (left), (right) to change fov"
+            "press: (w), (a) to move in x, (s), (d) to move in y, (up), (down) to move in z, (left), (right) to change fov of simulation camera"
         )
         print("press: (backspace) to reset, close figure to exit")
+        print()
         help_message_printed = True
 
 camera_offset = torch.zeros(3, dtype=torch.float32)
@@ -126,7 +128,7 @@ def main(args: Args):
     env_kwargs = dict(
         obs_mode="rgb+segmentation",
         render_mode="sensors",
-        reward_mode="none"
+        reward_mode="none",
         # use larger camera resolution to make it easier to align. In training we won't use this however
         sensor_configs=dict(width=512, height=512)
     )

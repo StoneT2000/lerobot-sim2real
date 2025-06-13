@@ -66,11 +66,10 @@ python lerobot_sim2real/scripts/capture_background_image.py --env-id="SO100Grasp
 Note that we still use the simulation environment here but primarily to determine how to crop the background image. If the sim camera resolution is 128x128 (the default) we crop the greenscreen image down to 128x128.
 
 After capturing a greenscreen image mount the robot back to where it was originally. If you want to double check you can run the camera alignment script with the green screen image supplied and nudge the real robot mount location until it lines up. Simply
-modify the env_config.json and add the path to the greenscreen image
+modify the env_config.json and add the path to the greenscreen image then run the camera alignment script again.
 
 ```bash
-python lerobot_sim2real/scripts/camera_alignment.py --env-id="SO100GraspCube-v1" --env-kwargs-json-path=env_config.json \
-    --greenscreen-overlay-path=greenscreen.png
+python lerobot_sim2real/scripts/camera_alignment.py --env-id="SO100GraspCube-v1" --env-kwargs-json-path=env_config.json
 ```
 
 ## 2: Visual Reinforcement Learning in Simulation
@@ -81,7 +80,7 @@ For the SO100GraspCube-v1 environment we have the following already tuned script
 
 ```bash
 seed=42
-python lerobot_sim2real/scripts/train_ppo_rgb.py --env_id="SO100GraspCube-v1" --env-kwargs-json-path=env_config.json \
+python lerobot_sim2real/scripts/train_ppo_rgb.py --env-id="SO100GraspCube-v1" --env-kwargs-json-path=env_config.json \
   --ppo.seed=${seed} \
   --ppo.num_envs=1024 --ppo.num-steps=16 --ppo.update_epochs=8 --ppo.num_minibatches=32 \
   --ppo.total_timesteps=100_000_000 --ppo.gamma=0.9 \
