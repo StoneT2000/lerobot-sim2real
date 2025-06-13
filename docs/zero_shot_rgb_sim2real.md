@@ -29,13 +29,17 @@ First thing to do is to decide in simulation where to put the 3rd-view camera re
 
 TODO images (and label what is robot base)
 
-To do so you can just edit the "base_camera_settings"."pos" value in the `env_config.json` file in the root of the repository. We use this config file to modify environment defaults when training (you can pass in a different file path if you want). To visualize what you just did you can record a video of your robot taking random actions in simulation with
+To do so you can just edit the "base_camera_settings"."pos" value in the `env_config.json` file in the root of the repository. We use this config file to modify environment defaults when training (you can pass in a different file path if you want). To visualize what you just did you can record a video of your environment being reset randomly to get a sense of where the camera is and see how the object positions are randomized.
 
 ```bash
-python lerobot_sim2real/scripts/demo_random_actions.py --env-id="SO100GraspCube-v1" --env-kwargs-json-path=env_config.json
+python lerobot_sim2real/scripts/record_reset_distribution.py --env-id="SO100GraspCube-v1" --env-kwargs-json-path=env_config.json
 ```
 
-You can also modify where the camera is pointing at in case it can't see the robot or enough of the workspace in simulation. Simply modify "base_camera_settings"."target" value accordingly, which is the 3D point the camera points at.
+You can also modify where the camera is pointing at in case it can't see the robot or enough of the workspace in simulation. Simply modify "base_camera_settings"."target" value accordingly, which is the 3D point the camera points at. The default options for the sim settings are tested and should work so you can also skip modifying the simulation environment and go straight to setting up the real camera.
+
+> [!NOTE]
+> Occlusion can make grasping a cube harder. If you plan to modify the sim environment make sure the cube is visible, close to the camera, and generally not behind the robot. If it isn't, you can modify the camera accordingly or also modify the spawn region for the cube in the env_config.json file.
+
 
 You might also notice that we often use `--env-id="SO100GraspCube-v1" --env-kwargs-json-path=env_config.json` in scripts. The codebase is built to support different environments and configurations so passing these tells those scripts which environment you want to work with and with what settings.
 
