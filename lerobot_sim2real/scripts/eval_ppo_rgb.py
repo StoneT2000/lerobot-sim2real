@@ -10,11 +10,10 @@ import gymnasium as gym
 import numpy as np
 import torch
 import tyro
-import signal
-import sys
 from lerobot_sim2real.config.real_robot import create_real_robot
 from lerobot_sim2real.rl.ppo_rgb import Agent
 
+from lerobot_sim2real.utils.safety import setup_safe_exit
 from mani_skill.agents.robots.lerobot.manipulator import LeRobotRealAgent
 from mani_skill.envs.sim2real_env import Sim2RealEnv
 from mani_skill.utils.wrappers.flatten import FlattenRGBDObservationWrapper
@@ -83,6 +82,7 @@ def main(args: Args):
         render_mode="sensors", # only sensors mode is supported right now for real envs, basically rendering the direct visual observations fed to policy
         max_episode_steps=args.max_episode_steps, # give our robot more time to try and re-try the task
         domain_randomization=False,
+        reward_mode="none"
     )
     if args.control_freq is not None:
         env_kwargs["sim_config"] = {"control_freq": args.control_freq}
@@ -102,7 +102,7 @@ def main(args: Args):
     
     # The Sim2RealEnv class uses the sim_env to help make various checks for sim2real alignment (e.g. observation space is the same, cameras are the similar)
     # and will always try its best to apply all wrappers you used on the sim env to the real env as well.
-    real_env = Sim2RealEnv(sim_env=sim_env, agent=real_agent, obs_mode="rgb")
+    real_env = Sim2RealEnv(sim_env=sim_env, agent=real_agent)
     # sim_env.print_sim_details()
     sim_obs, _ = sim_env.reset()
     real_obs, _ = real_env.reset()
@@ -112,20 +112,9 @@ def main(args: Args):
             f"{k}: sim_obs shape: {sim_obs[k].shape}, real_obs shape: {real_obs[k].shape}"
         )
 
+    
     ### Safety setups. Close environments/turn off robot upon ctrl+c ###
-    def signal_handler(sig, frame):
-        print("\nCtrl+C detected. Exiting gracefully...")
-        try:
-            sim_env.close()
-        except Exception:
-            pass
-        try:
-            real_env.close()
-        except Exception:
-            pass
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, signal_handler)
+    setup_safe_exit(sim_env, real_env, real_agent)
         
 
     ### Load our checkpoint ###
@@ -166,7 +155,7 @@ def main(args: Args):
 
             agent_obs = {k: v.to(device) for k, v in agent_obs.items()}
             action = agent.get_action(agent_obs)
-            if args.continuous_eval:
+            if not args.continuous_eval:
                 input("Press enter to continue to next timestep")
             real_obs, _, terminated, truncated, info = real_env.step(action.cpu().numpy())
             

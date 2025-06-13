@@ -3,6 +3,7 @@ import time
 from typing import Optional
 import gymnasium as gym
 import torch
+from lerobot_sim2real.utils.safety import setup_safe_exit
 from mani_skill.utils.wrappers.flatten import FlattenRGBDObservationWrapper
 from lerobot_sim2real.config.real_robot import create_real_robot
 from mani_skill.agents.robots.lerobot.manipulator import LeRobotRealAgent
@@ -118,13 +119,14 @@ def on_key_release(event):
     active_keys.discard(event.key)
 
 def main(args: Args):
-    real_robot = create_real_robot(uid="s100")
+    real_robot = create_real_robot(uid="so100")
     real_robot.connect()
     real_agent = LeRobotRealAgent(real_robot)
 
     env_kwargs = dict(
         obs_mode="rgb+segmentation",
         render_mode="sensors",
+        reward_mode="none"
         # use larger camera resolution to make it easier to align. In training we won't use this however
         sensor_configs=dict(width=512, height=512)
     )
@@ -136,7 +138,10 @@ def main(args: Args):
         **env_kwargs,
     )
     sim_env = FlattenRGBDObservationWrapper(sim_env)
-    real_env = Sim2RealEnv(sim_env=sim_env, agent=real_agent, obs_mode="rgb")
+    real_env = Sim2RealEnv(sim_env=sim_env, agent=real_agent)
+    # safety setup, now ctrl+c will first reset the robot to a resting position and then close environments and turn of torque
+    setup_safe_exit(sim_env, real_env, real_agent)
+
     real_obs, _ = real_env.reset()
 
     # for plotting robot camera reads
@@ -166,10 +171,6 @@ def main(args: Args):
         if not plt.fignum_exists(fig.number):
             print("The figure has been closed.")
             break
-
-
-    real_env.close()
-    sim_env.close()
 
 if __name__ == "__main__":
     args = tyro.cli(Args)
