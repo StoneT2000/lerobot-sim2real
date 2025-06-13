@@ -13,17 +13,18 @@ from dataclasses import dataclass
 class Args:
     env_id: str
     """The environment id to train on"""
-    env_kwargs_json_path: Optional[str] = None
-    """Path to a json file containing additional environment kwargs to use."""
     out: str
     """Path to save the greenscreen image to"""
+    env_kwargs_json_path: Optional[str] = None
+    """Path to a json file containing additional environment kwargs to use."""
+
 
 def main(args: Args):
     # TODO (can we avoid activating the robot?)
-    real_robot = create_real_robot(uid="s100")
+    real_robot = create_real_robot(uid="so100")
     real_robot.connect()
     real_agent = LeRobotRealAgent(real_robot)
-
+    
     sim_env = gym.make(
         args.env_id,
         obs_mode="rgb+segmentation",
