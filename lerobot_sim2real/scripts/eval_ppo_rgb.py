@@ -31,7 +31,7 @@ class Args:
     """if toggled, the sim and real envs will be visualized side by side"""
     continuous_eval: bool = True
     """If toggled, the evaluation will run until episode ends without user input. If false, at each timestep the user will be prompted to press enter to let the robot continue"""
-    max_episode_steps: int = 100
+    max_episode_steps: int = 150
     """The maximum number of control steps the real robot can take before we stop the episode and reset the environment. It is recommended to set this number to be larger than the value the sim env is set to, that way you can permit the
     robot more chances to recover from failures / solve the task."""
     num_episodes: Optional[int] = None
@@ -44,6 +44,8 @@ class Args:
     """Directory to save recordings of the camera captured images. If none no recordings are saved"""
     control_freq: Optional[int] = 15
     """The control frequency of the real robot. For safety reasons we recommend setting this to 15Hz or lower as we permit the RL agent to take larger actions to move faster. If this is none, it will use the same control frequency the sim env uses."""
+    robot_uid: str = "so100"
+    """The robot UID to use (so100 or so101)"""
 
 def overlay_envs(sim_env, real_env):
     """
@@ -72,7 +74,7 @@ def main(args: Args):
     torch.manual_seed(args.seed)
 
     ### Create and connect the real robot, wrap it to make it interfaceable with ManiSkill sim2real environments ###    
-    real_robot = create_real_robot(uid="so100")
+    real_robot = create_real_robot(uid=args.robot_uid)
     real_robot.connect()
     real_agent = LeRobotRealAgent(real_robot)
 
@@ -154,6 +156,13 @@ def main(args: Args):
 
             agent_obs = {k: v.to(device) for k, v in agent_obs.items()}
             action = agent.get_action(agent_obs)
+            # DEBUG: print gripper action (assuming gripper is last dim)
+            action_np = action.cpu().numpy()
+            if action_np.ndim == 2:
+                grip_act = action_np[0][-1]
+            else:
+                grip_act = action_np[-1]
+            print(f"Step {_}: gripper action (rgb policy): {grip_act:.4f}")
             if not args.continuous_eval:
                 input("Press enter to continue to next timestep")
             real_obs, _, terminated, truncated, info = real_env.step(action.cpu().numpy())
