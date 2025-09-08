@@ -38,13 +38,22 @@ TODO new photo
 
 ## 1.2: Get an image for greenscreening to bridge the sim2real visual gap 
 
-Next, take the robot off the surface/table and then take a picture of the background using the following script. It will save to a file `greenscreen.png`. If you can't unmount the robot, you can take the picture anyway and use photo editing tools or AI to remove the robot and inpaint the background.
+Next, take the robot off the surface/table, connect the wires to the robot (don't worry, it won't be moving, this is just to control the camera), and then take a picture of the background using the following script. It will save to a file `greenscreen.png`. If you can't unmount the robot, you can take the picture anyway and use photo editing tools or AI to remove the robot and inpaint the background.
 
 ```bash
 python lerobot_sim2real/scripts/capture_background_image.py --env-id="SO100GraspCube-v1" --env-kwargs-json-path=env_config.json --out=greenscreen.png
 ```
 
 Note that we still use the simulation environment here but primarily to determine how to crop the background image. If the sim camera resolution is 128x128 (the default) we crop the greenscreen image down to 128x128. Once the greenscreen.png file is saved, modify "greenscreen_overlay_path" key in the env_config.json file to include the path to that file.
+
+## 1.3 Tune Robot Motor Offsets
+
+While you already have calibrated the robot following the LeRobot calibration method (where you move motors around), we recommend adjusting it further to improve sim2real transfer. In `env_config.json` there is a field called `calibration_offset` which maps motor names to offsets in degrees. The default values are the ones that worked for our SO100, but you need to tune them such that when you run the command
+
+```bash
+```
+
+the robot moves to the following rest position and maintains either 90 or 180 degree angles between robot links. If one of the motors is off, tune the offset for that motor until it looks good. Repeatedly check this by running the command above.
 
 ## 1.3 Determine the Real World Camera Extrinsics
 

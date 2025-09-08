@@ -28,7 +28,9 @@ def main(args: Args):
     )
     if args.env_kwargs_json_path is not None:
         with open(args.env_kwargs_json_path, "r") as f:
-            env_kwargs.update(json.load(f))
+            data = json.load(f)
+            calibration_offset = data.pop("calibration_offset")
+            env_kwargs.update(**data)
 
     env = gym.make(args.env_id, **env_kwargs)
     if args.record_dir is not None:

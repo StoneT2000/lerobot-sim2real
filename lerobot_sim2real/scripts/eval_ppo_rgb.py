@@ -71,12 +71,6 @@ def main(args: Args):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    ### Create and connect the real robot, wrap it to make it interfaceable with ManiSkill sim2real environments ###    
-    real_robot = create_real_robot(uid="so100")
-    real_robot.connect()
-    real_agent = LeRobotRealAgent(real_robot)
-
-    ### Setup the sim environment to make various checks for sim2real alignment and debugging possible ###
     env_kwargs = dict(
         obs_mode="rgb+segmentation",
         render_mode="sensors", # only sensors mode is supported right now for real envs, basically rendering the direct visual observations fed to policy
@@ -84,11 +78,18 @@ def main(args: Args):
         domain_randomization=False,
         reward_mode="none"
     )
-
     if args.env_kwargs_json_path is not None:
         with open(args.env_kwargs_json_path, "r") as f:
-            env_kwargs.update(json.load(f))
-    
+            data = json.load(f)
+            calibration_offset = data.pop("calibration_offset")
+            env_kwargs.update(**data)
+
+    ### Create and connect the real robot, wrap it to make it interfaceable with ManiSkill sim2real environments ###    
+    real_robot = create_real_robot(uid="so100")
+    real_robot.connect()
+    real_agent = LeRobotRealAgent(real_robot, calibration_offset=calibration_offset)
+
+    ### Setup the sim environment to make various checks for sim2real alignment and debugging possible ###    
     sim_env = gym.make(
         args.env_id,
         **env_kwargs

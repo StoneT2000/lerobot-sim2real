@@ -120,10 +120,6 @@ def on_key_release(event):
     active_keys.discard(event.key)
 
 def main(args: Args):
-    real_robot = create_real_robot(uid="so100")
-    real_robot.connect()
-    real_agent = LeRobotRealAgent(real_robot)
-
     env_kwargs = dict(
         obs_mode="rgb+segmentation",
         render_mode="sensors",
@@ -133,7 +129,13 @@ def main(args: Args):
     )
     if args.env_kwargs_json_path is not None:
         with open(args.env_kwargs_json_path, "r") as f:
-            env_kwargs.update(json.load(f))
+            data = json.load(f)
+            calibration_offset = data.pop("calibration_offset")
+            env_kwargs.update(**data)
+
+    real_robot = create_real_robot(uid="so100")
+    real_robot.connect()
+    real_agent = LeRobotRealAgent(real_robot, calibration_offset=calibration_offset)
     sim_env = gym.make(
         args.env_id,
         **env_kwargs,

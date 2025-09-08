@@ -9,5 +9,13 @@
   "spawn_box_half_size": 0.1,
   "domain_randomization_config": {
     "robot_color": null
+  },
+  "calibration_offset": {
+    "shoulder_pan": -3,
+    "shoulder_lift": -3,
+    "elbow_flex": 5,
+    "wrist_flex": 5,
+    "wrist_roll": 0,
+    "gripper": 0
   }
 }

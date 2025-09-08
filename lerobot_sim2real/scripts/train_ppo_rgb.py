@@ -20,8 +20,9 @@ def main(args: Args):
     args.ppo.env_id = args.env_id
     if args.env_kwargs_json_path is not None:
         with open(args.env_kwargs_json_path, "r") as f:
-            env_kwargs = json.load(f)
-        args.ppo.env_kwargs = env_kwargs
+            data = json.load(f)
+            calibration_offset = data.pop("calibration_offset")
+            args.ppo.env_kwargs = data
     else:
         print("No env kwargs json path provided, using default env kwargs with default settings")
     train(args=args.ppo)
