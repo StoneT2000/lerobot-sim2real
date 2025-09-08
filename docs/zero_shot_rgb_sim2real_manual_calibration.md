@@ -28,9 +28,22 @@ First you should update the `lerobot_sim2real/config/real_robot.py` file to matc
 
 We provide a pre-built [simulation environment called SO100GraspCube-v1](https://github.com/haosulab/ManiSkill/tree/main/mani_skill/envs/tasks/digital_twins/so100_arm/grasp_cube.py) that only needs a few minor modifications for your own use. If you are interested in making your own environments to then tackle via sim2real reinforcement learning we recommend you finish this tutorial first, then learn how to [create custom simulated tasks in ManiSkill](https://maniskill.readthedocs.io/en/latest/user_guide/tutorials/custom_tasks/index.html), then follow the tutorial on how to [design them for sim2real support](https://maniskill.readthedocs.io/en/latest/user_guide/tutorials/sim2real/index.html)
 
-In this section we need to roughly align the real world and simulation environments. This means we need to decide where the robot is installed, and where the camera is relative to the robot. 
+In this section we need to roughly align the real world and simulation environments. This means we need to decide where the robot is installed, and where the camera is relative to the robot.
 
-## 1.1: Setup simulation camera and object spawn region
+
+## 1.1 Tune Robot Motor Offsets
+
+While you already have calibrated the robot following the LeRobot calibration method (where you move motors around), we recommend adjusting it further to improve sim2real transfer. In `env_config.json` there is a field called `calibration_offset` which maps motor names to offsets in degrees. The default values are the ones that worked for our SO100, but you need to tune them such that when you run the command
+
+```bash
+python lerobot_sim2real/scripts/tune_calibration_offset.py --env-kwargs-json-path=env_config.json
+```
+
+the robot moves to the rest position shown below and maintains either 90 or 180 degree angles between robot links. If one of the motors is off, tune the offset for that motor until it looks good. Repeatedly check this by running the command above.
+
+![](./assets/calibration_offset_guide.png)
+
+## 1.2: Setup simulation camera and object spawn region
 
 First thing to do is to decide in simulation where to put the 3rd-view camera relative to the robot. The robot is always spawned at the 0 point of the simulation, at height "0" which is by default the top of the table surface you mount the robot on. This is what the default looks like in simulation and in the real world:
 

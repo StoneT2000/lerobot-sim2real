@@ -22,6 +22,7 @@ If you find this project useful, give this repo and [ManiSkill](https://github.c
 Install this repo by running the following
 ```bash
 conda create -n ms3-lerobot "python==3.11" # 3.11 is recommended
+conda activate ms3-lerobot
 git clone https://github.com/StoneT2000/lerobot-sim2real.git
 pip install -e .
 pip install torch # install the version of torch that works for you

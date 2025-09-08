@@ -33,10 +33,19 @@ First you want to find some surface to attach your robot onto with a reasonable 
 
 TODO new photo
 
-> [!NOTE]
-> The camera location must have a clear view of the cube spawn region and of the robot + its gripper. Without a clear view there can be occlusion issues which will make it difficult to train a working model.
+## 1.2 Tune Robot Motor Offsets
 
-## 1.2: Get an image for greenscreening to bridge the sim2real visual gap 
+While you already have calibrated the robot following the LeRobot calibration method (where you move motors around), we recommend adjusting it further to improve sim2real transfer. In `env_config.json` there is a field called `calibration_offset` which maps motor names to offsets in degrees. The default values are the ones that worked for our SO100, but you need to tune them such that when you run the command
+
+```bash
+python lerobot_sim2real/scripts/tune_calibration_offset.py --env-kwargs-json-path=env_config.json
+```
+
+the robot moves to the rest position shown below and maintains either 90 or 180 degree angles between robot links. If one of the motors is off, tune the offset for that motor until it looks good. Repeatedly check this by running the command above.
+
+![](./assets/calibration_offset_guide.png)
+
+## 1.3: Get an image for greenscreening to bridge the sim2real visual gap 
 
 Next, take the robot off the surface/table, connect the wires to the robot (don't worry, it won't be moving, this is just to control the camera), and then take a picture of the background using the following script. It will save to a file `greenscreen.png`. If you can't unmount the robot, you can take the picture anyway and use photo editing tools or AI to remove the robot and inpaint the background.
 
@@ -46,18 +55,24 @@ python lerobot_sim2real/scripts/capture_background_image.py --env-id="SO100Grasp
 
 Note that we still use the simulation environment here but primarily to determine how to crop the background image. If the sim camera resolution is 128x128 (the default) we crop the greenscreen image down to 128x128. Once the greenscreen.png file is saved, modify "greenscreen_overlay_path" key in the env_config.json file to include the path to that file.
 
-## 1.3 Tune Robot Motor Offsets
-
-While you already have calibrated the robot following the LeRobot calibration method (where you move motors around), we recommend adjusting it further to improve sim2real transfer. In `env_config.json` there is a field called `calibration_offset` which maps motor names to offsets in degrees. The default values are the ones that worked for our SO100, but you need to tune them such that when you run the command
-
-```bash
-```
-
-the robot moves to the following rest position and maintains either 90 or 180 degree angles between robot links. If one of the motors is off, tune the offset for that motor until it looks good. Repeatedly check this by running the command above.
-
-## 1.3 Determine the Real World Camera Extrinsics
+## 1.4 Determine the Real World Camera Extrinsics
 
 For sim2real transfer we want to train our robot from the same camera view as the real world camera. We will be using the [EasyHEC package](https://github.com/StoneT2000/simple-easyhec) to optimize and predict the real world camera extrinsic parameters (the translation and rotation of the camera relative to the robot base). This method is used as it is fairly automatic compared to past approaches that use checkerboards (hand-eye calibration) or the previous iteration of this guide (manually moving the camera).
+
+## 1.5 Tune the simulation environment spawn region
+
+Depending on your chosen camera location, it is possible that the spawn region of the object we will try and pick up is occluded. Fix this by modifying the `spawn_box_pos` field in the `env_config.json` file. After modifying run
+
+```bash
+python lerobot_sim2real/scripts/record_reset_distribution.py --env-id="SO100GraspCube-v1" --env-kwargs-json-path=env_config.json
+```
+
+Check that the spawned cube is always visible at the start.
+
+
+> [!NOTE]
+> The camera location must have a clear view of the cube spawn region and of the robot + its gripper. Without a clear view there can be occlusion issues which will make it difficult to train a working model.
+
 
 ## 2: Visual Reinforcement Learning in Simulation
 

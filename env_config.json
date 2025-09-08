@@ -11,8 +11,8 @@
     "robot_color": null
   },
   "calibration_offset": {
-    "shoulder_pan": -3,
-    "shoulder_lift": -3,
+    "shoulder_pan": -1,
+    "shoulder_lift": -1,
     "elbow_flex": 5,
     "wrist_flex": 5,
     "wrist_roll": 0,
