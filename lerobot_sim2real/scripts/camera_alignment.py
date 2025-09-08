@@ -15,7 +15,6 @@ from mani_skill.utils.visualization.misc import tile_images
 from mani_skill.utils import sapien_utils
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
-
 @dataclass
 class Args:
     env_id: str = "SO100GraspCube-v1"
