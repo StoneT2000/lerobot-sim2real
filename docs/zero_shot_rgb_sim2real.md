@@ -59,6 +59,14 @@ Note that we still use the simulation environment here but primarily to determin
 
 For sim2real transfer we want to train our robot from the same camera view as the real world camera. We will be using the [EasyHEC package](https://github.com/StoneT2000/simple-easyhec) to optimize and predict the real world camera extrinsic parameters (the translation and rotation of the camera relative to the robot base). This method is used as it is fairly automatic compared to past approaches that use checkerboards (hand-eye calibration) or the previous iteration of this guide (manually moving the camera).
 
+To start the process, make sure you mount the robot back and then run
+
+```bash
+python lerobot_sim2real/scripts/easyhec_camera_calibration.py \
+  --model-cfg ../sam2/configs/sam2.1/sam2.1_hiera_l.yaml --checkpoint ../sam2/checkpoints/sam2.1_hiera_large.pt \
+  --env-kwargs-json-path=env_config.json
+```
+
 ## 1.5 Tune the simulation environment spawn region
 
 Depending on your chosen camera location, it is possible that the spawn region of the object we will try and pick up is occluded. Fix this by modifying the `spawn_box_pos` field in the `env_config.json` file. After modifying run
