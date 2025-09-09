@@ -1,13 +1,20 @@
 {
   "base_camera_settings": {
-      "pos": [0.69, 0.37, 0.28],
-      "fov": 0.8256,
-      "target": [0.185, -0.15, 0.0]
+      "extrinsics": "results/so100/stone_home/base_camera/camera_extrinsic_ros.npy",
+      "intrinsics": "results/so100/stone_home/base_camera/camera_intrinsic_128x128.npy"
   },
-  "greenscreen_overlay_path": null,
-  "spawn_box_pos": [0.3, 0.05],
+  "greenscreen_overlay_path": "greenscreen.png",
+  "spawn_box_pos": [0.3, -0.02],
   "spawn_box_half_size": 0.1,
   "domain_randomization_config": {
     "robot_color": null
+  },
+  "calibration_offset": {
+    "shoulder_pan": -1,
+    "shoulder_lift": -1,
+    "elbow_flex": 5,
+    "wrist_flex": 5,
+    "wrist_roll": 0,
+    "gripper": 0
   }
 }
