@@ -2,6 +2,9 @@ import json
 import gymnasium as gym
 from dataclasses import dataclass
 from typing import Optional
+
+import numpy as np
+from lerobot_sim2real.utils.camera import scale_intrinsics
 from mani_skill.utils.wrappers.record import RecordEpisode
 import tyro
 
@@ -22,16 +25,15 @@ def main(args: Args):
         render_mode="sensors",
         domain_randomization=True,
         reward_mode="none",
-        # note this changes the sim camera resolution to 512x512, but this is just for development/debugging. During training
-        # we will not use such large images
-        sensor_configs=dict(width=512, height=512, shader_pack="default")
+        sensor_configs=dict(shader_pack="default")
     )
     if args.env_kwargs_json_path is not None:
         with open(args.env_kwargs_json_path, "r") as f:
             data = json.load(f)
             calibration_offset = data.pop("calibration_offset")
             env_kwargs.update(**data)
-
+        env_kwargs["base_camera_settings"]["extrinsics"] = np.load(env_kwargs["base_camera_settings"]["extrinsics"])
+        env_kwargs["base_camera_settings"]["intrinsics"] = np.load(env_kwargs["base_camera_settings"]["intrinsics"])
     env = gym.make(args.env_id, **env_kwargs)
     if args.record_dir is not None:
         env = RecordEpisode(env, output_dir=args.record_dir, save_video=False, save_trajectory=False, video_fps=15)

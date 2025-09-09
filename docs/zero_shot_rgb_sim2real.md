@@ -25,7 +25,7 @@ First you should update the `lerobot_sim2real/config/real_robot.py` file to matc
 
 We provide a pre-built [simulation environment called SO100GraspCube-v1](https://github.com/haosulab/ManiSkill/tree/main/mani_skill/envs/tasks/digital_twins/so100_arm/grasp_cube.py) that only needs a few minor modifications for your own use. If you are interested in making your own environments to then tackle via sim2real reinforcement learning we recommend you finish this tutorial first, then learn how to [create custom simulated tasks in ManiSkill](https://maniskill.readthedocs.io/en/latest/user_guide/tutorials/custom_tasks/index.html), then follow the tutorial on how to [design them for sim2real support](https://maniskill.readthedocs.io/en/latest/user_guide/tutorials/sim2real/index.html)
 
-In this section we need to roughly align the real world and simulation environments. This means we need to decide where the robot is installed, and where the camera is relative to the robot. Throughout this section we will be modifying the `env_config.json` file which is used to configure the simulation environment used during training.
+In this section we will align the real world and simulation environments by configuring the robot installation location, camera positioning, and ensuring camera images match between sim and real. We'll modify the `env_config.json` file which configures the simulation environment for training. While this initial setup can be challenging, it only needs to be done once unless the camera position changes.
 
 ## 1.1: Setup the Robot and Camera in the Real World
 
@@ -55,9 +55,9 @@ python lerobot_sim2real/scripts/capture_background_image.py --env-id="SO100Grasp
 
 Note that we still use the simulation environment here but primarily to determine how to crop the background image. If the sim camera resolution is 128x128 (the default) we crop the greenscreen image down to 128x128. Once the greenscreen.png file is saved, modify "greenscreen_overlay_path" key in the env_config.json file to include the path to that file.
 
-## 1.4 Determine the Real World Camera Extrinsics
+## 1.4 Determine the Real World Camera Extrinsics / Intrinsics
 
-For sim2real transfer we want to train our robot from the same camera view as the real world camera. We will be using the [EasyHEC package](https://github.com/StoneT2000/simple-easyhec) to optimize and predict the real world camera extrinsic parameters (the translation and rotation of the camera relative to the robot base). This method is used as it is fairly automatic compared to past approaches that use checkerboards (hand-eye calibration) or the previous iteration of this guide (manually moving the camera).
+For sim2real transfer we want to train our robot from the same camera view as the real world camera. We will be using the [EasyHEC package](https://github.com/StoneT2000/simple-easyhec) to optimize and predict the real world camera extrinsic parameters (the translation and rotation of the camera relative to the robot base). This method is used as it is fairly automatic compared to past approaches that use checkerboards (hand-eye calibration) or the previous iteration of this guide (manually moving the camera). Currently only realsense cameras are supported, others can also be supported if you modify the code to figure out the camera intrinsics
 
 To start the process, make sure you mount the robot back and then run
 
@@ -67,6 +67,15 @@ python lerobot_sim2real/scripts/easyhec_camera_calibration.py \
   --env-kwargs-json-path=env_config.json
 ```
 
+The script will move the robot to a few configurations and take pictures. Then it will open a GUI for you to annotate positive/negative points with to indicate which part of the image is the robot, which is not (make sure to only include 3D printed parts and motors, no wires or clamps etc.). After that process the optimization will hopefully converge and the calibration results as well as visualizations are saved to `results/so100/{robot_id}/base_camera`. The results below are an ideal case, if you have some error the training domain randomization can help overcome that at the cost of some performance.
+
+![](./assets/easyhec_calibration_result.png)
+
+Once the process is done and the results look good, modify the `env_config.json` `"base_camera_settings"` to point a path to the 128x128 intrinsics matrix and the extrinsics matrix .npy files saved by the calibration process. Note that the original intrinsics of the camera are not used, this is because intrinsics matrices need to be rescaled if you want to render different sized images with the same perspective (as we will do during training). 
+
+> [!NOTE]
+> If the process does not work well, usually it means either your initial extrinsic guess is too far off, or the segmentation masks are not good enough, or the additional motor tuning done in [step 1.2](#12-tune-robot-motor-offsets) was not good enough. The visualization above shows the quality of segmentation masks used for this example and the initial extrinsic guess, and the final predicted extrinsics. The accuracy is measured by how close the mask/shadow overlays the actual robot parts (excluding the wires).
+
 ## 1.5 Tune the simulation environment spawn region
 
 Depending on your chosen camera location, it is possible that the spawn region of the object we will try and pick up is occluded. Fix this by modifying the `spawn_box_pos` field in the `env_config.json` file. After modifying run
@@ -75,11 +84,7 @@ Depending on your chosen camera location, it is possible that the spawn region o
 python lerobot_sim2real/scripts/record_reset_distribution.py --env-id="SO100GraspCube-v1" --env-kwargs-json-path=env_config.json
 ```
 
-Check that the spawned cube is always visible at the start.
-
-
-> [!NOTE]
-> The camera location must have a clear view of the cube spawn region and of the robot + its gripper. Without a clear view there can be occlusion issues which will make it difficult to train a working model.
+Check that the spawned cube is always visible at the start. We recommend ensuring the has a clear view of the cube spawn region and of the robot + its gripper. Without a clear view there can be occlusion issues which will make it difficult to train a working model.
 
 
 ## 2: Visual Reinforcement Learning in Simulation

@@ -27,6 +27,7 @@ from easyhec.utils.utils_3d import merge_meshes
 from easyhec import ROBOT_DEFINITIONS_DIR
 
 from lerobot_sim2real.config.real_robot import create_real_robot
+from lerobot_sim2real.utils.camera import scale_intrinsics
 
 
 @dataclass
@@ -278,6 +279,7 @@ def main(args: SO100Args):
             predicted_camera_extrinsic_ros,
         )
         np.save(Path(args.output_dir) / robot_id / k / "camera_intrinsic.npy", intrinsic)
+        np.save(Path(args.output_dir) / robot_id / k / "camera_intrinsic_128x128.npy", scale_intrinsics(intrinsic, images[0].shape[1], images[0].shape[0], 128, 128))
 
         visualization.visualize_extrinsic_results(
             images=images,

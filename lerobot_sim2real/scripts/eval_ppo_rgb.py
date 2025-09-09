@@ -13,6 +13,7 @@ import tyro
 from lerobot_sim2real.config.real_robot import create_real_robot
 from lerobot_sim2real.rl.ppo_rgb import Agent
 
+from lerobot_sim2real.utils.camera import scale_intrinsics
 from lerobot_sim2real.utils.safety import setup_safe_exit
 from mani_skill.agents.robots.lerobot.manipulator import LeRobotRealAgent
 from mani_skill.envs.sim2real_env import Sim2RealEnv
@@ -83,6 +84,8 @@ def main(args: Args):
             data = json.load(f)
             calibration_offset = data.pop("calibration_offset")
             env_kwargs.update(**data)
+        env_kwargs["base_camera_settings"]["extrinsics"] = np.load(env_kwargs["base_camera_settings"]["extrinsics"])
+        env_kwargs["base_camera_settings"]["intrinsics"] = np.load(env_kwargs["base_camera_settings"]["intrinsics"])
 
     ### Create and connect the real robot, wrap it to make it interfaceable with ManiSkill sim2real environments ###    
     real_robot = create_real_robot(uid="so100")
