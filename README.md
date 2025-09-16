@@ -20,6 +20,7 @@ If you find this project useful, give this repo and [ManiSkill](https://github.c
 ## Getting Started
 
 Install this repo by running the following
+
 ```bash
 conda create -n ms3-lerobot "python==3.11" # 3.11 is recommended
 git clone https://github.com/StoneT2000/lerobot-sim2real.git
@@ -29,7 +30,7 @@ pip install torch # install the version of torch that works for you
 
 The ManiSkill/SAPIEN simulator code is dependent on working NVIDIA drivers and vulkan packages. After running pip install above, if something is wrong with drivers/vulkan, please follow the troubleshooting guide here: https://maniskill.readthedocs.io/en/latest/user_guide/getting_started/installation.html#troubleshooting
 
-To double check if the simulator is installed correctly, you can run 
+To double check if the simulator is installed correctly, you can run
 
 ```
 python -m mani_skill.examples.demo_random_action
@@ -49,3 +50,12 @@ Note that depending on what hardware you are using you might need to install add
 We currently provide a tutorial on how to train a RGB based model controlling an SO100 robot arm in simulation and deploying that zero-shot in the real world to grasp cubes. Follow the tutorial [here](./docs/zero_shot_rgb_sim2real.md). Note while SO101 looks similar to SO100, we have found that there are some key differences that make sim2real fail for SO101, we will updaye this repository once SO101 is modelled correctly.
 
 We are also working on a tutorial showing you how to make your own environments ready for sim2real, stay tuned!
+
+## SO101 Support Branch Notes
+
+- [x] Merge Viswesh-N pr [Added SO101 support - Tested with real robot](https://github.com/StoneT2000/lerobot-sim2real/pull/12/files)
+- [ ] Take code changes from [SO-101 Support to Maniskill](https://github.com/haosulab/ManiSkill/pull/1171) and integrate into this repo, using Maniksill as a dependency.
+  - We will need to make futher changes to the environment to support Simple EacyHEC camera calibration format so it makes sense to move all of that code to this repo
+- [ ] Merge [Add EasyHEC camera extrinsics optimization for easier tutorial + calibration offsets guide ](https://github.com/StoneT2000/lerobot-sim2real/pull/17)
+  - Simple EasyHEC gives us the camera instrinsic and extrinsic matrices to calibrate the camera. The environment will need to be updated to work with this format
+- [ ] Test with SO101 arm and make adjustments and bug fixes as needed
