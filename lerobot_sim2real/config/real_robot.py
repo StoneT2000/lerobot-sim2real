@@ -8,16 +8,17 @@ import numpy as np
 from lerobot.cameras.realsense import RealSenseCameraConfig
 from lerobot.cameras.opencv import OpenCVCameraConfig
 
+
 def create_real_robot(uid: str = "so100") -> Robot:
     """Wrapper function to map string UIDS to real robot configurations. Primarily for saving a bit of code for users when they fork the repository. They can just edit the camera, id etc. settings in this one file."""
     if uid == "so100":
         robot_config = SO100FollowerConfig(
             port="/dev/ttyACM0",
             id="so100_follower",
-            use_degrees=True, 
-             cameras={
+            use_degrees=True,
+            cameras={
                 "base_camera": OpenCVCameraConfig(
-                    index_or_path=Path("/dev/video2"),
+                    index_or_path=Path("/dev/video0"),
                     height=720,
                     width=1280,
                     fps=30,
@@ -27,14 +28,16 @@ def create_real_robot(uid: str = "so100") -> Robot:
         )
     elif uid == "so101":
         robot_config = SO101FollowerConfig(
-            port="/dev/ttyACM0",  
-            id="so101_follower",  
-            use_degrees=True,  
+            port="/dev/ttyACM0",
+            id="so101_follower",
+            use_degrees=True,
             cameras={
+                # You will likely need to adjust this for your own camera setup
+                # run `python -m lerobot.find_cameras opencv` to find your available camera indices
                 "base_camera": OpenCVCameraConfig(
-                    index_or_path=Path("/dev/video2"),
-                    height=720,
-                    width=1280,
+                    index_or_path=Path("/dev/video0"),
+                    height=480,
+                    width=640,
                     fps=30,
                     warmup_s=2,
                 )
@@ -42,6 +45,6 @@ def create_real_robot(uid: str = "so100") -> Robot:
         )
     else:
         raise ValueError(f"Unknown robot uid: {uid}. Supported: 'so100', 'so101'")
-    
+
     robot = make_robot_from_config(robot_config)
-    return robot 
+    return robot

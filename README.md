@@ -55,8 +55,14 @@ We are also working on a tutorial showing you how to make your own environments 
 
 - [x] Merge Viswesh-N pr [Added SO101 support - Tested with real robot](https://github.com/StoneT2000/lerobot-sim2real/pull/12/files)
 - [ ] Take code changes from [SO-101 Support to Maniskill](https://github.com/haosulab/ManiSkill/pull/1171) and integrate into this repo, using Maniksill as a dependency.
-  - We will need to make futher changes to the environment to support Simple EacyHEC camera calibration format so it makes sense to move all of that code to this repo
-  - Test things are working end to end at this point before moving on to Simple EasyHEC integration
+  - [x] Copy the code chnages to this repo
+  - [ ] Integrate and test the code changes
 - [ ] Merge [Add EasyHEC camera extrinsics optimization for easier tutorial + calibration offsets guide ](https://github.com/StoneT2000/lerobot-sim2real/pull/17)
   - Simple EasyHEC gives us the camera instrinsic and extrinsic matrices to calibrate the camera. The environment will need to be updated to work with this format
 - [ ] Test with SO101 arm and make adjustments and bug fixes as needed
+
+## SO101 Testing Notes
+
+- Run `python so101_sim2real_calibration_test.py`
+  - This will launch Maniskill and allow you to control the robot in sim with by moving the real robot with torque disabled
+  - You will probably need to update the camera config. Use `python -m lerobot.find_cameras opencv` to find your available camera indices, width, height, and FPS
