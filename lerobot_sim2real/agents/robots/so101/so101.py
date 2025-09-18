@@ -13,12 +13,15 @@ from mani_skill.agents.registration import register_agent
 from mani_skill.utils import common
 from mani_skill.utils.structs.actor import Actor
 from mani_skill.utils.structs.pose import Pose
+from pathlib import Path
 
 
 @register_agent()
 class SO101(BaseAgent):
     uid = "so101"
-    urdf_path = f"{PACKAGE_ASSET_DIR}/robots/so101/so101.urdf"
+    
+    # Use the urdf file from this repo
+    urdf_path = str(Path(__file__).parent.parent.parent.parent / "assets" / "robots" / "so101" / "so101" / "so101.urdf")
     urdf_config = dict(
         _materials=dict(
             gripper=dict(static_friction=2.5, dynamic_friction=2.5, restitution=0.0)

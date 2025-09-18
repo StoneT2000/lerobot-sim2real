@@ -31,7 +31,7 @@ class SO101GraspCubeDomainRandomizationConfig:
     """Color of the robot in RGB format in scale of 0 to 1 mapping to 0 to 255.
     If you want to randomize it just set this value to "random". If left as None which is
     the default, it will set the robot parts to white and motors to black. For more fine-grained choices on robot colors you need to modify
-    mani_skill/assets/robots/so101/so101.urdf in the ManiSkill package."""
+    lerobot_sim2real/assets/robots/so101/so101/so101.urdf in the local assets directory."""
     randomize_lighting: bool = True
     max_camera_offset: Sequence[float] = (0.025, 0.025, 0.025)
     """max camera offset from the base camera position in x, y, and z axes"""
