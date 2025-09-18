@@ -30,6 +30,9 @@ import matplotlib.pyplot as plt
 from dataclasses import dataclass
 import threading
 
+# Import the environment to register it with gymnasium
+from lerobot_sim2real.env.tasks.digit_twins.so101_arm.grasp_cube import SO101GraspCubeEnv
+
 
 @dataclass
 class CalibrationData:
@@ -110,7 +113,7 @@ class SO101CalibrationTester:
         os.environ.setdefault("SAPIEN_DISABLE_VULKAN", "1")
 
         self.sim_env = gym.make(
-            "SO101GraspCube-v1",
+            "SO101GraspCubeLeRobotSim2Real-v1",
             robot_uids="so101",
             render_mode="human",
             **env_kwargs,

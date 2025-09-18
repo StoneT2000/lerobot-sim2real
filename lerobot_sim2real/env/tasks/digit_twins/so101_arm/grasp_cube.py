@@ -9,7 +9,7 @@ from sapien.render import RenderBodyComponent
 from transforms3d.euler import euler2quat
 
 import mani_skill.envs.utils.randomization as randomization
-from mani_skill.agents.robots.so101.so_101 import SO101
+from lerobot_sim2real.agents.robots.so101.so101 import SO101
 from mani_skill.envs.tasks.digital_twins.base_env import BaseDigitalTwinEnv
 from mani_skill.sensors.camera import CameraConfig
 from mani_skill.utils import common, sapien_utils
@@ -53,9 +53,9 @@ class SO101GraspCubeDomainRandomizationConfig:
         return {k: v for k, v in asdict(self).items()}
 
 
-@register_env("SO101GraspCube-v1", max_episode_steps=64)
+@register_env("SO101GraspCubeLeRobotSim2Real-v1", max_episode_steps=64)
 class SO101GraspCubeEnv(BaseDigitalTwinEnv):
-    """
+    """ 
     **Task Description:**
     A simple task where the objective is to grasp a cube with the SO101 arm and bring it up to a target rest pose.
     **Randomizations:**
