@@ -6,7 +6,9 @@ import torch
 from lerobot_sim2real.utils.safety import setup_safe_exit
 from mani_skill.utils.wrappers.flatten import FlattenRGBDObservationWrapper
 from lerobot_sim2real.config.real_robot import create_real_robot
-from mani_skill.agents.robots.lerobot.manipulator import LeRobotRealAgent
+
+# from mani_skill.agents.robots.lerobot.manipulator import LeRobotRealAgent
+from lerobot_sim2real.agents.robots.so101.lerobot_manipulator import LeRobotRealAgent
 from mani_skill.envs.sim2real_env import Sim2RealEnv
 import cv2
 import numpy as np
@@ -15,6 +17,11 @@ from mani_skill.utils.visualization.misc import tile_images
 from mani_skill.utils import sapien_utils
 from dataclasses import dataclass
 import matplotlib.pyplot as plt
+
+# Import the environment to register it with gymnasiumgs
+from lerobot_sim2real.env.tasks.digit_twins.so101_arm.grasp_cube import (
+    SO101GraspCubeEnv,
+)
 
 
 @dataclass
@@ -134,6 +141,9 @@ def main(args: Args):
         # use larger camera resolution to make it easier to align. In training we won't use this however
         sensor_configs=dict(width=512, height=512),
     )
+
+    calibration_offset = {}
+
     if args.env_kwargs_json_path is not None:
         with open(args.env_kwargs_json_path, "r") as f:
             data = json.load(f)
