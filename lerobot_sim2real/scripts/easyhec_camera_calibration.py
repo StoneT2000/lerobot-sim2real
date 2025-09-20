@@ -24,6 +24,12 @@ from easyhec.segmentation.interactive import InteractiveSegmentation
 from easyhec.utils import visualization
 from easyhec.utils.camera_conversions import opencv2ros, ros2opencv
 from easyhec.utils.utils_3d import merge_meshes
+
+# Import our custom visualization function
+import sys
+
+sys.path.append(str(Path(__file__).parent.parent.parent))
+from custom_visualization import visualize_extrinsic_results_red_mask
 # from easyhec import ROBOT_DEFINITIONS_DIR
 
 from lerobot_sim2real.config.real_robot import create_real_robot
@@ -98,7 +104,7 @@ def main(args: SO101Args):
     for k in cameras_ft.keys():
         initial_extrinsic_guess = np.eye(4)
 
-        # the guess says we are at position xyz=[-0.4, 0.0, 0.4] and angle the camerea downwards by np.pi / 4 radians  or 45 degrees
+        # the guess says we are at position xyz=[-0.4, 0.0, 0.4] and angle the camera downwards by np.pi / 4 radians  or 45 degrees
         # note that this convention is more natural for robotics (follows the typical convention for ROS and various simulators), where +Z is moving up towards the sky, +Y is to the left, +X is forward
         initial_extrinsic_guess[:3, :3] = euler2mat(0, np.pi / 4, -np.pi / 5)
         initial_extrinsic_guess[:3, 3] = np.array([-0.4, 0.1, 0.5])
@@ -158,6 +164,8 @@ def main(args: SO101Args):
         "gripper.pos",
     ]
 
+    # Get current positions in degrees, convert to radians
+    # then return a np vector of the positions
     def get_qpos(robot: SO101Follower, flat: bool = True):
         obs = robot.bus.sync_read("Present_Position")
         for k in CALIBRATION_OFFSET.keys():
@@ -180,7 +188,6 @@ def main(args: SO101Args):
             )
         robot.send_action(action)
 
-    # todo(jackvial): Use lerobot_sim2real/assets/robots/so101/so101.urdf
     robot_def_path = (
         Path(__file__).parent.parent / "assets" / "robots" / "so101" / "so101.urdf"
     )
@@ -242,10 +249,14 @@ def main(args: SO101Args):
                 delta_step = delta_qpos.clip(
                     min=-max_radians_per_step, max=max_radians_per_step
                 )
+
+                # Step until target and goal are within some threshold distance/norm
                 if np.linalg.norm(delta_qpos) < 1e-4:
                     break
                 target_qpos += delta_step
                 dt_s = time.perf_counter() - start_loop_t
+
+                # Move the robot to the new target
                 set_target_qpos(robot, target_qpos)
                 time.sleep(1 / control_freq - dt_s)
             time.sleep(
@@ -419,7 +430,7 @@ def main(args: SO101Args):
             ),
         )
 
-        visualization.visualize_extrinsic_results(
+        visualize_extrinsic_results_red_mask(
             images=images,
             link_poses_dataset=link_poses_dataset,
             meshes=meshes,
@@ -430,6 +441,7 @@ def main(args: SO101Args):
             masks=masks,
             labels=["Initial Extrinsic Guess", "Predicted Extrinsic"],
             output_dir=str(Path(args.output_dir) / robot_id / k),
+            mask_color=(255, 0, 0),  # Red color
         )
         print(f"Visualizations saved to {Path(args.output_dir) / robot_id / k}")
 

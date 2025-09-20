@@ -38,7 +38,7 @@ def create_real_robot(uid: str = "so100") -> Robot:
                 # You will likely need to adjust this for your own camera setup
                 # run `python -m lerobot.find_cameras opencv` to find your available camera indices
                 "base_camera": OpenCVCameraConfig(
-                    index_or_path=Path("/dev/video0"),
+                    index_or_path=Path("/dev/video4"),
                     height=480,
                     width=640,
                     fps=30,

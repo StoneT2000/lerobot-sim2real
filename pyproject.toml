@@ -17,6 +17,7 @@ dependencies = [
     "urchin>=0.0.29",
     "easyhec>=0.1.9",
     "nvdiffrast",
+    "ninja>=1.13.0",
 ]
 
 [project.urls]
