@@ -7,8 +7,10 @@ from lerobot.robots.utils import make_robot_from_config
 import numpy as np
 from lerobot.cameras.realsense import RealSenseCameraConfig
 from lerobot.cameras.opencv import OpenCVCameraConfig
+from lerobot.cameras.realsense.configuration_realsense import RealSenseCameraConfig
 
 
+# todo(jackvial): Make the cameras configurable via the env_config.json file
 def create_real_robot(uid: str = "so100") -> Robot:
     """Wrapper function to map string UIDS to real robot configurations. Primarily for saving a bit of code for users when they fork the repository. They can just edit the camera, id etc. settings in this one file."""
     if uid == "so100":
@@ -24,6 +26,7 @@ def create_real_robot(uid: str = "so100") -> Robot:
                     fps=30,
                     warmup_s=2,
                 )
+                # "base_camera": RealSenseCameraConfig(serial_number_or_name="146322070293", fps=30, width=1280, height=720)
             },
         )
     elif uid == "so101":

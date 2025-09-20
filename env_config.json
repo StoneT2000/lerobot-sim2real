@@ -1,7 +1,7 @@
 {
     "base_camera_settings": {
-        "extrinsics": "results/so100/stone_home/base_camera/camera_extrinsic_ros.npy",
-        "intrinsics": "results/so100/stone_home/base_camera/camera_intrinsic_128x128.npy"
+        "extrinsics": "results/so101/stone_home/base_camera/camera_extrinsic_ros.npy",
+        "intrinsics": "results/so101/stone_home/base_camera/camera_intrinsic_128x128.npy"
     },
     "greenscreen_overlay_path": "greenscreen.png",
     "spawn_box_pos": [

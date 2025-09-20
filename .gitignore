@@ -17,3 +17,7 @@ videos/
 wandb/
 runs/
 outputs
+
+greenscreen.png
+
+results/

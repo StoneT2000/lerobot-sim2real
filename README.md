@@ -23,10 +23,19 @@ Install this repo by running the following
 
 ```bash
 conda create -n ms3-lerobot "python==3.11" # 3.11 is recommended
+conda activate ms3-lerobot
 git clone https://github.com/StoneT2000/lerobot-sim2real.git
 pip install -e .
 pip install torch # install the version of torch that works for you
 ```
+
+For sim2real transfer we also need to calibrate the real world camera. The default guide for this uses [EasyHEC](https://github.com/stonet2000/simple-easyhec) for that, which requires you to further run
+
+```bash
+pip install "nvdiffrast @ git+https://github.com/NVlabs/nvdiffrast.git@729261dc64c4241ea36efda84fbf532cc8b425b8"
+```
+
+and setup SAM2 following their instructions: https://github.com/facebookresearch/sam2. You don't need this if you opt for the manual/slow camera calibration route.
 
 The ManiSkill/SAPIEN simulator code is dependent on working NVIDIA drivers and vulkan packages. After running pip install above, if something is wrong with drivers/vulkan, please follow the troubleshooting guide here: https://maniskill.readthedocs.io/en/latest/user_guide/getting_started/installation.html#troubleshooting
 
@@ -47,7 +56,9 @@ Note that depending on what hardware you are using you might need to install add
 
 ## Sim2Real Tutorial
 
-We currently provide a tutorial on how to train a RGB based model controlling an SO100 robot arm in simulation and deploying that zero-shot in the real world to grasp cubes. Follow the tutorial [here](./docs/zero_shot_rgb_sim2real.md). Note while SO101 looks similar to SO100, we have found that there are some key differences that make sim2real fail for SO101, we will updaye this repository once SO101 is modelled correctly.
+We currently provide a tutorial on how to train a RGB based model controlling an SO100 robot arm in simulation and deploying that zero-shot in the real world to grasp cubes. Follow the tutorial [here](./docs/zero_shot_rgb_sim2real.md). Note while SO101 looks similar to SO100, we have found that there are some key differences that make sim2real fail for SO101, we will update this repository once SO101 is modelled correctly.
+
+The old version of the tutorial used some manual/slow camera calibration and can be found [here](./docs/zero_shot_rgb_sim2real_manual_calibration.md).
 
 We are also working on a tutorial showing you how to make your own environments ready for sim2real, stay tuned!
 
