@@ -39,7 +39,7 @@ from easyhec.optim.nvdiffrast_renderer import NVDiffrastRenderer
 
 from lerobot_sim2real.config.real_robot import create_real_robot
 from lerobot_sim2real.utils.camera import scale_intrinsics
-from lerobot_sim2real.optim.streaming_optimize import optimize_streaming
+from lerobot_sim2real.optim.streaming_optimize import optimize_streaming, optimize_final
 
 
 def _k_from_fov(
@@ -193,6 +193,17 @@ class WebMaskAnnotator:
                     )
                     opt_info = gr.Textbox(label="Progress", interactive=False)
                     btn_preview = gr.Button("Start Preview")
+            with gr.Row():
+                with gr.Column():
+                    invert_extr = gr.Checkbox(
+                        value=True, label="Invert extrinsic for rendering"
+                    )
+                with gr.Column():
+                    swap_order = gr.Checkbox(
+                        value=False, label="Swap composition order (T @ L -> L @ T)"
+                    )
+                with gr.Column():
+                    lr_preview = gr.Number(value=3e-4, label="Preview learning rate")
             with gr.Row():
                 init_xyz = gr.Markdown("")
             with gr.Row():
@@ -348,7 +359,7 @@ class WebMaskAnnotator:
                     )
                 return out
 
-            def start_preview(preview_idx: float):
+            def start_preview(preview_idx: float, inv_ex: bool, swp: bool, lr: float):
                 i_img = int(preview_idx)
                 # Call optimizer in history mode to get best-improvement trajectory
                 if (
@@ -396,6 +407,7 @@ class WebMaskAnnotator:
                     camera_height=self.images.shape[1],
                     camera_mount_poses=mount_poses_t,
                     iterations=self.optim_iterations,
+                    learning_rate=float(lr),
                     early_stopping_steps=self.optim_early_stopping,
                     verbose=True,
                 )
@@ -467,7 +479,7 @@ class WebMaskAnnotator:
             btn_exit.click(finish_and_exit, outputs=status)
             btn_preview.click(
                 start_preview,
-                inputs=opt_idx,
+                inputs=[opt_idx, invert_extr, swap_order, lr_preview],
                 outputs=[opt_image, opt_info, opt_idx, init_xyz, step_table],
             )
 
@@ -680,6 +692,9 @@ def main(args: SO101WebArgs):
         qpos_samples = [
             np.array([0, 0, 0, np.pi / 2, np.pi / 2, 0.2]),
             np.array([np.pi / 3, -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
+            # np.array([-np.pi / 4, -np.pi / 6, np.pi / 6, np.pi / 2, np.pi / 2, 0.1]),
+            # np.array([0, 0, 0, 0, np.pi / 2, 0.2]),
+            # np.array([0, np.pi / 6, 0, 0, np.pi / 2, 0.2]),
         ]
         control_freq = 15
         max_radians_per_step = 0.05
@@ -766,13 +781,13 @@ def main(args: SO101WebArgs):
             np.save(mask_path, masks)
 
         predicted_camera_extrinsic_opencv = (
-            optimize(
+            optimize_final(
+                initial_extrinsic_guess=torch.tensor(initial_extrinsic_guess)
+                .float()
+                .to(device),
                 camera_intrinsic=torch.from_numpy(intrinsic).float().to(device),
                 masks=torch.from_numpy(masks).float().to(device),
                 link_poses_dataset=torch.from_numpy(link_poses_dataset)
-                .float()
-                .to(device),
-                initial_extrinsic_guess=torch.tensor(initial_extrinsic_guess)
                 .float()
                 .to(device),
                 meshes=meshes,
@@ -783,9 +798,10 @@ def main(args: SO101WebArgs):
                     if camera_mount_poses is not None
                     else None
                 ),
-                gt_camera_pose=None,
                 iterations=args.train_steps,
+                learning_rate=3e-4,
                 early_stopping_steps=args.early_stopping_steps,
+                verbose=False,
             )
             .cpu()
             .numpy()
@@ -829,6 +845,7 @@ def main(args: SO101WebArgs):
             labels=["Initial Extrinsic Guess", "Predicted Extrinsic"],
             output_dir=str(Path(args.output_dir) / robot_id / k),
             mask_color=(255, 0, 0),
+            invert_extrinsic=True,
         )
         print(f"Visualizations saved to {Path(args.output_dir) / robot_id / k}")
 

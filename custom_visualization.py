@@ -28,6 +28,8 @@ def visualize_extrinsic_results_red_mask(
     fill_alpha: float = 0.5,
     overlay_edges: bool = True,
     edge_thickness: int = 2,
+    invert_extrinsic: bool = False,
+    swap_multiplication_order: bool = False,
 ):
     """
     Visualizes a given list of extrinsic matrices and draws the mask cameras at those extrinsics would project on the original RGB images.
@@ -50,6 +52,7 @@ def visualize_extrinsic_results_red_mask(
     camera_height, camera_width = images[0].shape[:2]
     renderer = NVDiffrastRenderer(camera_height, camera_width)
     extrinsics = torch.from_numpy(extrinsics).float().to(device)
+    intrinsic_t = torch.from_numpy(intrinsic).float().to(device)
     if camera_mount_poses is not None:
         camera_mount_poses = torch.from_numpy(camera_mount_poses).float().to(device)
     link_poses_dataset = torch.from_numpy(link_poses_dataset).float().to(device)
@@ -65,13 +68,21 @@ def visualize_extrinsic_results_red_mask(
     link_faces = [torch.from_numpy(mesh.faces).int().to(device) for mesh in meshes]
 
     def get_mask_from_camera_pose(camera_pose):
+        cam_pose = camera_pose
+        if invert_extrinsic:
+            cam_pose = torch.linalg.inv(cam_pose)
         mask = torch.zeros((camera_height, camera_width), device=device)
         for j, link_pose in enumerate(link_poses_dataset[i]):
+            composed = (
+                cam_pose @ link_pose
+                if not swap_multiplication_order
+                else link_pose @ cam_pose
+            )
             link_mask = renderer.render_mask(
                 link_vertices[j],
                 link_faces[j],
-                intrinsic,
-                camera_pose @ link_pose,
+                intrinsic_t,
+                composed,
             )
             link_mask = link_mask.detach()
             mask[link_mask > 0] = 1
@@ -119,7 +130,8 @@ def visualize_extrinsic_results_red_mask(
 
         for j in range(len(extrinsics)):
             if camera_mount_poses is not None:
-                mask = get_mask_from_camera_pose(extrinsics[j] @ camera_mount_poses[i])
+                composed_extr = extrinsics[j] @ camera_mount_poses[i]
+                mask = get_mask_from_camera_pose(composed_extr)
             else:
                 mask = get_mask_from_camera_pose(extrinsics[j])
             mask = mask.cpu().numpy()

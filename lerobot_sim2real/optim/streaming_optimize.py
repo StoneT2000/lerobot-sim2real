@@ -3,7 +3,8 @@ from typing import List, Optional, Dict, Any
 import torch
 from tqdm import tqdm
 
-from easyhec.optim.rb_solver import RBSolver, RBSolverConfig
+from .rb_solver_override import RBSolver, RBSolverConfig  # type: ignore
+# from easyhec.optim.rb_solver import RBSolver, RBSolverConfig  # type: ignore
 
 
 @torch.no_grad()
@@ -21,10 +22,11 @@ def optimize_streaming(
     camera_height: int,
     camera_mount_poses: Optional[torch.Tensor] = None,
     iterations: int = 5000,
-    learning_rate: float = 3e-3,
+    learning_rate: float = 3e-4,
     batch_size: Optional[int] = None,
     early_stopping_steps: int = 1000,
     verbose: bool = True,
+    loss_multiplier: float = 1.0,
 ) -> Dict[str, Any]:
     """
     Variant of easyhec.optim.optimize that returns per-step histories for visualization.
@@ -75,7 +77,7 @@ def optimize_streaming(
 
         output = solver(batch)
         optimizer.zero_grad()
-        output["mask_loss"].backward()
+        (output["mask_loss"] * loss_multiplier).backward()
         optimizer.step()
 
         loss_value = float(output["mask_loss"].item())
@@ -108,3 +110,37 @@ def optimize_streaming(
         else torch.empty((0, 4, 4), device=device),
         "final_best_extrinsic": best_predicted_extrinsic,
     }
+
+
+@torch.no_grad()
+def optimize_final(
+    initial_extrinsic_guess: torch.Tensor,
+    camera_intrinsic: torch.Tensor,
+    masks: torch.Tensor,
+    link_poses_dataset: torch.Tensor,
+    meshes: List,
+    camera_width: int,
+    camera_height: int,
+    camera_mount_poses: Optional[torch.Tensor] = None,
+    iterations: int = 5000,
+    learning_rate: float = 3e-4,
+    batch_size: Optional[int] = None,
+    early_stopping_steps: int = 1000,
+    verbose: bool = False,
+) -> torch.Tensor:
+    hist = optimize_streaming(
+        initial_extrinsic_guess=initial_extrinsic_guess,
+        camera_intrinsic=camera_intrinsic,
+        masks=masks,
+        link_poses_dataset=link_poses_dataset,
+        meshes=meshes,
+        camera_width=camera_width,
+        camera_height=camera_height,
+        camera_mount_poses=camera_mount_poses,
+        iterations=iterations,
+        learning_rate=learning_rate,
+        batch_size=batch_size,
+        early_stopping_steps=early_stopping_steps,
+        verbose=verbose,
+    )
+    return hist["final_best_extrinsic"].detach().clone()
