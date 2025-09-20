@@ -28,23 +28,26 @@ try:
         frames = pipeline.wait_for_frames()
         depth = frames.get_depth_frame()
         color = frames.get_color_frame()
-        if not depth or not color: continue
+        if not depth or not color:
+            continue
 
         # Convert frames to numpy arrays
         depth_image = np.asanyarray(depth.get_data())
         color_image = np.asanyarray(color.get_data())
-        
+
         # Apply colormap to depth image (image must be converted to 8-bit per pixel first)
-        depth_colormap = cv2.applyColorMap(cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET)
+        depth_colormap = cv2.applyColorMap(
+            cv2.convertScaleAbs(depth_image, alpha=0.03), cv2.COLORMAP_JET
+        )
 
         # Stack both images horizontally
         images = np.hstack((color_image, depth_colormap))
 
         # Display both streams in one window
-        cv2.imshow('Color and Depth Streams', images)
-        
+        cv2.imshow("Color and Depth Streams", images)
+
         # Break loop with 'q' key
-        if cv2.waitKey(1) & 0xFF == ord('q'):
+        if cv2.waitKey(1) & 0xFF == ord("q"):
             break
 
     # Clean up
