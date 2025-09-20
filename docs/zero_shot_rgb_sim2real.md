@@ -45,7 +45,7 @@ the robot moves to the rest position shown below and maintains either 90 or 180 
 
 ![](./assets/calibration_offset_guide.png)
 
-## 1.3: Get an image for greenscreening to bridge the sim2real visual gap 
+## 1.3: Get an image for greenscreening to bridge the sim2real visual gap
 
 Next, take the robot off the surface/table, connect the wires to the robot (don't worry, it won't be moving, this is just to control the camera), and then take a picture of the background using the following script. It will save to a file `greenscreen.png`. If you can't unmount the robot, you can take the picture anyway and use photo editing tools or AI to remove the robot and inpaint the background.
 
@@ -63,7 +63,7 @@ To start the process, make sure you mount the robot back and then run
 
 ```bash
 python lerobot_sim2real/scripts/easyhec_camera_calibration.py \
-  --model-cfg ../sam2/configs/sam2.1/sam2.1_hiera_l.yaml --checkpoint ../sam2/checkpoints/sam2.1_hiera_large.pt \
+  --model-cfg ../sam2/sam2/configs/sam2.1/sam2.1_hiera_l.yaml --checkpoint ../sam2/checkpoints/sam2.1_hiera_large.pt \
   --env-kwargs-json-path=env_config.json
 ```
 
@@ -71,7 +71,7 @@ The script will move the robot to a few configurations and take pictures. Then i
 
 ![](./assets/easyhec_calibration_result.png)
 
-Once the process is done and the results look good, modify the `env_config.json` `"base_camera_settings"` to point a path to the 128x128 intrinsics matrix and the extrinsics matrix .npy files saved by the calibration process. Note that the original intrinsics of the camera are not used, this is because intrinsics matrices need to be rescaled if you want to render different sized images with the same perspective (as we will do during training). 
+Once the process is done and the results look good, modify the `env_config.json` `"base_camera_settings"` to point a path to the 128x128 intrinsics matrix and the extrinsics matrix .npy files saved by the calibration process. Note that the original intrinsics of the camera are not used, this is because intrinsics matrices need to be rescaled if you want to render different sized images with the same perspective (as we will do during training).
 
 > [!NOTE]
 > If the process does not work well, usually it means either your initial extrinsic guess is too far off, or the segmentation masks are not good enough, or the additional motor tuning done in [step 1.2](#12-tune-robot-motor-offsets) was not good enough. The visualization above shows the quality of segmentation masks used for this example and the initial extrinsic guess, and the final predicted extrinsics. The accuracy is measured by how close the mask/shadow overlays the actual robot parts (excluding the wires).
@@ -85,7 +85,6 @@ python lerobot_sim2real/scripts/record_reset_distribution.py --env-id="SO100Gras
 ```
 
 Check that the spawned cube is always visible at the start. We recommend ensuring the has a clear view of the cube spawn region and of the robot + its gripper. Without a clear view there can be occlusion issues which will make it difficult to train a working model.
-
 
 ## 2: Visual Reinforcement Learning in Simulation
 
@@ -117,7 +116,6 @@ Moreover, for this environment the evaluation result curves may look approximate
 ![](./assets/eval_return_success_curves.png)
 
 For the SO100GraspCube-v1 task you don't need 100_000_000 timesteps of training for successful deployment. We find that around 25 to 40 million are enough, which take about an hour of training on a 4090 GPU. Over training can sometimes lead to worse policies! Generally make sure first your policy reaches a high evaluation success rate in simulation before considering taking a checkpoint and deploying it.
-
 
 ## 3: Real World Deployment
 
