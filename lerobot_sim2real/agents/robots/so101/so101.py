@@ -19,9 +19,15 @@ from pathlib import Path
 @register_agent()
 class SO101(BaseAgent):
     uid = "so101"
-    
+
     # Use the urdf file from this repo
-    urdf_path = str(Path(__file__).parent.parent.parent.parent / "assets" / "robots" / "so101" / "so101" / "so101.urdf")
+    urdf_path = str(
+        Path(__file__).parent.parent.parent.parent
+        / "assets"
+        / "robots"
+        / "so101"
+        / "so101.urdf"
+    )
     urdf_config = dict(
         _materials=dict(
             gripper=dict(static_friction=2.5, dynamic_friction=2.5, restitution=0.0)
