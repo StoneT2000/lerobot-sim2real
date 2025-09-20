@@ -18,6 +18,7 @@ dependencies = [
     "easyhec>=0.1.9",
     "nvdiffrast",
     "ninja>=1.13.0",
+    "gradio>=5.46.1",
 ]
 
 [project.urls]
