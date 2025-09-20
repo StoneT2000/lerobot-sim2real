@@ -55,7 +55,7 @@ class SO101GraspCubeDomainRandomizationConfig:
 
 @register_env("SO101GraspCubeLeRobotSim2Real-v1", max_episode_steps=64)
 class SO101GraspCubeEnv(BaseDigitalTwinEnv):
-    """ 
+    """
     **Task Description:**
     A simple task where the objective is to grasp a cube with the SO101 arm and bring it up to a target rest pose.
     **Randomizations:**
@@ -111,6 +111,8 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
                 "No greenscreen overlay path provided, no greenscreen will be used"
             )
             self.rgb_overlay_mode = "none"
+            # Ensure downstream logic expecting a dict can safely iterate/inspect keys
+            self.rgb_overlay_paths = {}
 
         # set the camera called "base_camera" to use the greenscreen overlay when rendering
         else:
