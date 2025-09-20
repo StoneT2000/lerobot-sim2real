@@ -63,7 +63,7 @@ class LeRobotRealAgent(BaseRealAgent):
                 "The calibration offset for the robot is not tuned!! Unless you are absolutely sure you don't need it,you will most likely get poor results for sim2real/real2sim transfer."
             )
 
-        if self.real_robot.name == "so100_follower":
+        if self.real_robot.name == "so101_follower":
             self.real_robot.bus.motors["gripper"].norm_mode = MotorNormMode.DEGREES
 
     def start(self):

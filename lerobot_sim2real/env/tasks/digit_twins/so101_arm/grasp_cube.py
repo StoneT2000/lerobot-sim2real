@@ -1,6 +1,7 @@
 from dataclasses import asdict, dataclass
 from typing import Any, Dict, Optional, Sequence, Union
 
+import os
 import dacite
 import numpy as np
 import sapien
@@ -18,7 +19,7 @@ from mani_skill.utils.registration import register_env
 from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs.actor import Actor
 from mani_skill.utils.structs.pose import Pose
-from mani_skill.utils.structs.types import GPUMemoryConfig, SimConfig
+from mani_skill.utils.structs.types import SimConfig
 
 
 # there are many ways to parameterize an environment's domain randomization. This is a simple way to do it
@@ -116,7 +117,14 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
 
         # set the camera called "base_camera" to use the greenscreen overlay when rendering
         else:
-            self.rgb_overlay_paths = dict(base_camera=greenscreen_overlay_path)
+            if not os.path.exists(greenscreen_overlay_path):
+                logger.warning(
+                    f"Greenscreen overlay file not found at '{greenscreen_overlay_path}'. Disabling greenscreen."
+                )
+                self.rgb_overlay_mode = "none"
+                self.rgb_overlay_paths = {}
+            else:
+                self.rgb_overlay_paths = dict(base_camera=greenscreen_overlay_path)
 
         self.spawn_box_pos = spawn_box_pos
         self.spawn_box_half_size = spawn_box_half_size
@@ -397,20 +405,44 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
         return obs
 
     def _get_obs_extra(self, info: Dict):
-        # we ensure that the observation data is always retrievable in the real world, using only real world
-        # available data (joint positions or the controllers target joint positions in this case).
-        obs = dict(
-            dist_to_rest_qpos=self.agent.controller._target_qpos[:, :-1]
-            - self.rest_qpos[:-1],
-        )
-        if self.obs_mode_struct.state:
-            # state based policies can gain access to more information that helps learning
-            obs.update(
-                is_grasped=info["is_grasped"],
-                obj_pose=self.cube.pose.raw_pose,
-                tcp_pos=self.agent.tcp_pos,
-                tcp_to_obj_pos=self.cube.pose.p - self.agent.tcp_pos,
-            )
+        # Ensure this works both in pure sim and when called through Sim2RealEnv
+        target_qpos = getattr(self.agent.controller, "_target_qpos", None)
+        if isinstance(target_qpos, torch.Tensor):
+            # Prefer the real/sim controller target and compute distance to a rest pose if available
+            rest_qpos = getattr(self, "rest_qpos", None)
+            if isinstance(rest_qpos, torch.Tensor):
+                # Align devices and shapes, ignore the last gripper dim when comparing
+                dist_to_rest_qpos = (
+                    target_qpos[:, :-1] - rest_qpos.to(target_qpos.device)[:-1]
+                )
+            else:
+                # Fallback: compare to zeros of the same shape (robust for real-only runs)
+                zeros_like = torch.zeros_like(target_qpos[:, :-1])
+                dist_to_rest_qpos = target_qpos[:, :-1] - zeros_like
+        else:
+            # If controller state is unavailable, provide a safe default
+            dist_to_rest_qpos = torch.tensor(0.0)
+
+        obs = dict(dist_to_rest_qpos=dist_to_rest_qpos)
+
+        # Only add sim-specific extras when they exist
+        if getattr(self, "obs_mode_struct", None) is not None and getattr(
+            self.obs_mode_struct, "state", False
+        ):
+            if hasattr(self, "cube") and hasattr(self, "agent"):
+                obs.update(
+                    is_grasped=info.get(
+                        "is_grasped",
+                        torch.zeros((), device=dist_to_rest_qpos.device)
+                        if isinstance(dist_to_rest_qpos, torch.Tensor)
+                        else 0,
+                    ),
+                    obj_pose=getattr(self.cube.pose, "raw_pose", None),
+                    tcp_pos=getattr(self.agent, "tcp_pos", None),
+                    tcp_to_obj_pos=(self.cube.pose.p - self.agent.tcp_pos)
+                    if hasattr(self.cube.pose, "p") and hasattr(self.agent, "tcp_pos")
+                    else None,
+                )
         return obs
 
     def evaluate(self):

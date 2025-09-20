@@ -1,9 +1,20 @@
 {
     "base_camera_settings": {
         "extrinsics": "results/so101/so101_follower/base_camera/camera_extrinsic_ros.npy",
-        "intrinsics": "results/so101/so101_follower/base_camera/camera_intrinsic_128x128.npy"
+        "intrinsics": "results/so101/so101_follower/base_camera/camera_intrinsic_128x128.npy",
+        "pos": [
+            0.72,
+            0.3368,
+            0.3067
+        ],
+        "fov": 0.9025,
+        "target": [
+            0.185,
+            -0.15,
+            0.0
+        ]
     },
-    "greenscreen_overlay_path": "greenscreen.png",
+    "greenscreen_overlay_path": "",
     "spawn_box_pos": [
         0.3,
         -0.02
@@ -13,11 +24,11 @@
         "robot_color": null
     },
     "calibration_offset": {
-        "shoulder_pan": -1,
-        "shoulder_lift": -1,
-        "elbow_flex": 5,
-        "wrist_flex": 5,
-        "wrist_roll": 0,
+        "shoulder_pan": 14,
+        "shoulder_lift": 10,
+        "elbow_flex": -5,
+        "wrist_flex": 0,
+        "wrist_roll": -7,
         "gripper": 0
     }
 }
