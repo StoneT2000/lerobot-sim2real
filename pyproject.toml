@@ -9,11 +9,14 @@ dependencies = [
     "mani_skill==v3.0.0b21",
     "tensorboard",
     "wandb",
-    "feetech-servo-sdk",         # Required for Feetech motors used by SO100 robot
-    "pyrealsense2",              # Required for RealSense cameras
-    "fastapi>=0.100.0",          # Required for camera alignment web app
+    "feetech-servo-sdk", # Required for Feetech motors used by SO100 robot
+    "pyrealsense2", # Required for RealSense cameras
+    "fastapi>=0.100.0", # Required for camera alignment web app
     "uvicorn[standard]>=0.23.0", # ASGI server for FastAPI
-    "websockets>=11.0",          # WebSocket support
+    "websockets>=11.0", # WebSocket support
+    "urchin>=0.0.29",
+    "easyhec>=0.1.9",
+    "nvdiffrast",
 ]
 
 [project.urls]
@@ -22,3 +25,6 @@ Homepage = "https://github.com/StoneT2000/lerobot-sim2real"
 [build-system]
 requires = ["setuptools>=62.3.0"]
 build-backend = "setuptools.build_meta"
+
+[tool.uv.sources]
+nvdiffrast = { git = "https://github.com/NVlabs/nvdiffrast.git", rev = "729261dc64c4241ea36efda84fbf532cc8b425b8" }

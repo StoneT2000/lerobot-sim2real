@@ -14,7 +14,7 @@ import tyro
 from lerobot.cameras.realsense import RealSenseCamera
 
 from lerobot.motors.motors_bus import MotorNormMode
-from lerobot.robots.so100_follower.so100_follower import SO100Follower
+from lerobot.robots.so101_follower.so101_follower import SO101Follower
 from transforms3d.euler import euler2mat
 from urchin import URDF
 
@@ -31,35 +31,37 @@ from lerobot_sim2real.utils.camera import scale_intrinsics
 
 
 @dataclass
-class SO100Args(Args):
-    """Calibrate a (realsense) camera with LeRobot SO100. Note that this script might not work with your particular realsense camera, modify as needed. Other cameras can work if you modify the code to get the camera intrinsics and a single color image from the camera. Results are saved to {output_dir} and organized by the camera name specified in the robot config. Currently only supports off-hand cameras
-    
-    For your own usage you may have a different camera setup, robot, calibration offsets etc., so we recommend you to copy this file at https://github.com/stonet2000/simple-easyhec/blob/main/easyhec/examples/real/so100.py. 
-    
+class SO101Args(Args):
+    """Calibrate a (realsense) camera with LeRobot SO101. Note that this script might not work with your particular realsense camera, modify as needed. Other cameras can work if you modify the code to get the camera intrinsics and a single color image from the camera. Results are saved to {output_dir} and organized by the camera name specified in the robot config. Currently only supports off-hand cameras
+
+    For your own usage you may have a different camera setup, robot, calibration offsets etc., so we recommend you to copy this file at https://github.com/stonet2000/simple-easyhec/blob/main/easyhec/examples/real/so101.py.
+
     Before usage make sure to calibrate the robot's motors according to the LeRobot tutorial and look for all comments that start with "CHECK:" which highlight the following:
 
     1. Check the robot config and make sure the correct camera is used. The default script is for a single realsense camera labelled as "base_camera".
     2. Check and modify the CALIBRATION_OFFSET dictionary to match your own robot's calibration offsets. This is extremely important to tune and is necessary since the 0 degree position of the joints in the real world when calibrated with LeRobot currently do not match the 0 degree position when rendered/simulated.
     3. Modify the initial extrinsic guess if the optimization process fails to converge to a good solution. To save time you can also turn on --use-previous-captures to skip the data collection process if already done once.
 
-    Note that LeRobot SO100 motor calibration is done by moving most joints from one end to another. Make sure to move the joints are far as possible during the LeRobot tutorial on caibration for best results.
+    Note that LeRobot SO101 motor calibration is done by moving most joints from one end to another. Make sure to move the joints are far as possible during the LeRobot tutorial on caibration for best results.
 
     """
-    output_dir: str = "results/so100"
+
+    output_dir: str = "results/so101"
     use_previous_captures: bool = False
     """If True, will use the previous collected images and robot segmentations if they exist which can save you time. Otherwise, will prompt you to generate a new segmentation mask. This is useful if you find the initial extrinsic guess is not good enough and simply want to refine that and want to skip the segmentation process."""
 
     env_kwargs_json_path: Optional[str] = None
     """Path to a json file containing additional environment kwargs to use."""
 
-def main(args: SO100Args):
+
+def main(args: SO101Args):
     CALIBRATION_OFFSET = {
         "shoulder_pan": 0,
         "shoulder_lift": 0,
         "elbow_flex": 0,
         "wrist_flex": 0,
         "wrist_roll": 0,
-        "gripper": 0
+        "gripper": 0,
     }
     if args.env_kwargs_json_path is not None:
         with open(args.env_kwargs_json_path, "r") as f:
@@ -72,9 +74,11 @@ def main(args: SO100Args):
             user_tuned_calibration_offset = True
             break
     if not user_tuned_calibration_offset:
-        logging.warning("The calibration offset for sim2real/real2sim is not tuned!! Unless you are absolutely sure you will most likely get poor results.")
+        logging.warning(
+            "The calibration offset for sim2real/real2sim is not tuned!! Unless you are absolutely sure you will most likely get poor results."
+        )
 
-    robot: SO100Follower = create_real_robot("so100")
+    robot: SO101Follower = create_real_robot("so101")
     robot_id = robot.id if robot.id is not None else "default"
     robot.bus.motors["gripper"].norm_mode = MotorNormMode.DEGREES
     robot.connect()
@@ -83,7 +87,7 @@ def main(args: SO100Args):
     print(f"Found {len(cameras_ft)} cameras to calibrate")
     for k in cameras_ft.keys():
         (Path(args.output_dir) / robot_id / k).mkdir(parents=True, exist_ok=True)
-    
+
     ### Make an initial guess for the extrinsic for each camera ###
     # CHECK: Double check this initial extrinsic guess is roughly close to the real world.
     initial_extrinsic_guesses = dict()
@@ -102,13 +106,14 @@ def main(args: SO100Args):
     for k in initial_extrinsic_guesses.keys():
         print(f"Camera {k}:\n{repr(initial_extrinsic_guesses[k])}")
 
-
     # get camera intrinsics for realsense cameras.
     intrinsics = dict()
     for cam_name, cam in robot.cameras.items():
         if isinstance(cam, RealSenseCamera):
             streams = cam.rs_profile.get_streams()
-            assert len(streams) == 1, "Only one stream per camera is supported at the moment and it must be the color steam. Make sure to not enable any other streams."
+            assert len(streams) == 1, (
+                "Only one stream per camera is supported at the moment and it must be the color steam. Make sure to not enable any other streams."
+            )
             color_stream = streams[0]
             color_intrinsics = color_stream.as_video_stream_profile().get_intrinsics()
             intrinsic = np.array(
@@ -120,13 +125,19 @@ def main(args: SO100Args):
             )
             intrinsics[cam_name] = intrinsic
 
-
-
     ### Data Collection Process below ###
     # We move the robot to a few joint configurations and collect images and generate a link pose dataset.
 
-    joint_position_names = ["shoulder_pan.pos", "shoulder_lift.pos", "elbow_flex.pos", "wrist_flex.pos", "wrist_roll.pos", "gripper.pos"]
-    def get_qpos(robot: SO100Follower, flat: bool = True):
+    joint_position_names = [
+        "shoulder_pan.pos",
+        "shoulder_lift.pos",
+        "elbow_flex.pos",
+        "wrist_flex.pos",
+        "wrist_roll.pos",
+        "gripper.pos",
+    ]
+
+    def get_qpos(robot: SO101Follower, flat: bool = True):
         obs = robot.bus.sync_read("Present_Position")
         for k in CALIBRATION_OFFSET.keys():
             obs[k] = obs[k] - CALIBRATION_OFFSET[k]
@@ -139,15 +150,21 @@ def main(args: SO100Args):
             joint_positions.append(v)
         joint_positions = np.array(joint_positions)
         return joint_positions
-    
-    def set_target_qpos(robot: SO100Follower, qpos: np.ndarray):
+
+    def set_target_qpos(robot: SO101Follower, qpos: np.ndarray):
         action = {}
         for name, qpos_val in zip(joint_position_names, qpos):
-            action[name] = np.rad2deg(qpos_val) + CALIBRATION_OFFSET[name.removesuffix(".pos")]
+            action[name] = (
+                np.rad2deg(qpos_val) + CALIBRATION_OFFSET[name.removesuffix(".pos")]
+            )
         robot.send_action(action)
-    
-    robot_def_path = ROBOT_DEFINITIONS_DIR / "so100"
-    robot_urdf = URDF.load(str(robot_def_path / "so100.urdf"))
+
+    # todo(jackvial): Use lerobot_sim2real/assets/robots/so101/so101.urdf
+    robot_def_path = (
+        Path(__file__).parent.parent / "assets" / "robots" / "so101" / "so101.urdf"
+    )
+    print(f"Robot definition path: {robot_def_path}")
+    robot_urdf = URDF.load(str(robot_def_path))
 
     meshes = []
     for link in robot_urdf.links:
@@ -156,19 +173,22 @@ def main(args: SO100Args):
             link_meshes += visual.geometry.mesh.meshes
         meshes.append(merge_meshes(link_meshes))
 
-    if args.use_previous_captures and (Path(args.output_dir) / robot_id / "link_poses_dataset.npy").exists():
+    if (
+        args.use_previous_captures
+        and (Path(args.output_dir) / robot_id / "link_poses_dataset.npy").exists()
+    ):
         # load the previous captures
-        link_poses_dataset = np.load(Path(args.output_dir) / robot_id / "link_poses_dataset.npy")
-        image_dataset = np.load(Path(args.output_dir) / robot_id / "image_dataset.npy", allow_pickle=True).reshape(-1)[0]
+        link_poses_dataset = np.load(
+            Path(args.output_dir) / robot_id / "link_poses_dataset.npy"
+        )
+        image_dataset = np.load(
+            Path(args.output_dir) / robot_id / "image_dataset.npy", allow_pickle=True
+        ).reshape(-1)[0]
     else:
-        # reference qpos positions to calibrate with    
+        # reference qpos positions to calibrate with
         qpos_samples = [
-            np.array([
-                0, 0, 0, np.pi / 2, np.pi / 2, 0.2
-            ]),
-            np.array([
-                np.pi / 3, -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0
-            ])
+            np.array([0, 0, 0, np.pi / 2, np.pi / 2, 0.2]),
+            np.array([np.pi / 3, -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
         ]
         control_freq = 15
         max_radians_per_step = 0.05
@@ -178,13 +198,12 @@ def main(args: SO100Args):
         image_dataset = defaultdict(list)
 
         for i in range(len(qpos_samples)):
-
             # control code for lerobot below
             goal_qpos = qpos_samples[i]
             target_qpos = get_qpos(robot)
-            for _ in range(int(20*control_freq)):
+            for _ in range(int(20 * control_freq)):
                 start_loop_t = time.perf_counter()
-                delta_qpos = (goal_qpos - target_qpos)
+                delta_qpos = goal_qpos - target_qpos
                 delta_step = delta_qpos.clip(
                     min=-max_radians_per_step, max=max_radians_per_step
                 )
@@ -194,11 +213,13 @@ def main(args: SO100Args):
                 dt_s = time.perf_counter() - start_loop_t
                 set_target_qpos(robot, target_qpos)
                 time.sleep(1 / control_freq - dt_s)
-            time.sleep(1) # give some time for the robot to settle, cheap arms don't hold up as well
+            time.sleep(
+                1
+            )  # give some time for the robot to settle, cheap arms don't hold up as well
             qpos_dict = get_qpos(robot, flat=False)
             for cam_name, cam in robot.cameras.items():
                 image_dataset[cam_name].append(cam.async_read())
-                
+
             # get link poses
             cfg = dict()
             for k in robot_urdf.joint_map.keys():
@@ -209,7 +230,10 @@ def main(args: SO100Args):
         for k in image_dataset.keys():
             image_dataset[k] = np.stack(image_dataset[k])
 
-        np.save(Path(args.output_dir) / robot_id / "link_poses_dataset.npy", link_poses_dataset)
+        np.save(
+            Path(args.output_dir) / robot_id / "link_poses_dataset.npy",
+            link_poses_dataset,
+        )
         np.save(Path(args.output_dir) / robot_id / "image_dataset.npy", image_dataset)
 
     ### Camera Calibration Process below ###
@@ -219,10 +243,10 @@ def main(args: SO100Args):
         initial_extrinsic_guess = initial_extrinsic_guesses[k]
         intrinsic = intrinsics[k]
         images = image_dataset[k]
-        camera_mount_poses = None # TODO (stao): support this
+        camera_mount_poses = None  # TODO (stao): support this
         camera_width = images.shape[2]
         camera_height = images.shape[1]
-        
+
         mask_path = Path(args.output_dir) / robot_id / k / f"mask.npy"
         if args.use_previous_captures and mask_path.exists():
             print(f"Using previous mask from {mask_path}")
@@ -242,7 +266,9 @@ def main(args: SO100Args):
             optimize(
                 camera_intrinsic=torch.from_numpy(intrinsic).float().to(device),
                 masks=torch.from_numpy(masks).float().to(device),
-                link_poses_dataset=torch.from_numpy(link_poses_dataset).float().to(device),
+                link_poses_dataset=torch.from_numpy(link_poses_dataset)
+                .float()
+                .to(device),
                 initial_extrinsic_guess=torch.tensor(initial_extrinsic_guess)
                 .float()
                 .to(device),
@@ -267,7 +293,9 @@ def main(args: SO100Args):
 
         print(f"Predicted camera extrinsic")
         print(f"OpenCV:\n{repr(predicted_camera_extrinsic_opencv)}")
-        print(f"ROS/SAPIEN/ManiSkill/Mujoco/Isaac:\n{repr(predicted_camera_extrinsic_ros)}")
+        print(
+            f"ROS/SAPIEN/ManiSkill/Mujoco/Isaac:\n{repr(predicted_camera_extrinsic_ros)}"
+        )
 
         Path(args.output_dir).mkdir(parents=True, exist_ok=True)
         np.save(
@@ -278,8 +306,15 @@ def main(args: SO100Args):
             Path(args.output_dir) / robot_id / k / "camera_extrinsic_ros.npy",
             predicted_camera_extrinsic_ros,
         )
-        np.save(Path(args.output_dir) / robot_id / k / "camera_intrinsic.npy", intrinsic)
-        np.save(Path(args.output_dir) / robot_id / k / "camera_intrinsic_128x128.npy", scale_intrinsics(intrinsic, images[0].shape[1], images[0].shape[0], 128, 128))
+        np.save(
+            Path(args.output_dir) / robot_id / k / "camera_intrinsic.npy", intrinsic
+        )
+        np.save(
+            Path(args.output_dir) / robot_id / k / "camera_intrinsic_128x128.npy",
+            scale_intrinsics(
+                intrinsic, images[0].shape[1], images[0].shape[0], 128, 128
+            ),
+        )
 
         visualization.visualize_extrinsic_results(
             images=images,
@@ -295,5 +330,6 @@ def main(args: SO100Args):
         )
         print(f"Visualizations saved to {Path(args.output_dir) / robot_id / k}")
 
+
 if __name__ == "__main__":
-    main(tyro.cli(SO100Args))
+    main(tyro.cli(SO101Args))
