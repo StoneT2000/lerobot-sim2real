@@ -28,15 +28,40 @@ from easyhec.examples.real.base import Args
 from easyhec.optim.optimize import optimize
 from easyhec.utils.camera_conversions import opencv2ros, ros2opencv
 from easyhec.utils.utils_3d import merge_meshes
+import cv2
 
 # Optional: red mask overlay visualization
 import sys
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from custom_visualization import visualize_extrinsic_results_red_mask
+from easyhec.optim.nvdiffrast_renderer import NVDiffrastRenderer
 
 from lerobot_sim2real.config.real_robot import create_real_robot
 from lerobot_sim2real.utils.camera import scale_intrinsics
+from lerobot_sim2real.optim.streaming_optimize import optimize_streaming
+
+
+def _k_from_fov(
+    width: int, height: int, hfov_deg: Optional[float], vfov_deg: Optional[float]
+):
+    import math
+
+    cx = width / 2.0
+    cy = height / 2.0
+    fx = None
+    fy = None
+    if hfov_deg is not None:
+        fx = 0.5 * width / math.tan(math.radians(hfov_deg) / 2.0)
+    if vfov_deg is not None:
+        fy = 0.5 * height / math.tan(math.radians(vfov_deg) / 2.0)
+    if fx is not None and fy is None:
+        fy = fx * (width / height)
+    if fy is not None and fx is None:
+        fx = fy * (height / width)
+    if fx is None or fy is None:
+        return None
+    return np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32)
 
 
 def _normalize_sam2_cfg_name(cfg: str) -> str:
@@ -70,6 +95,14 @@ class WebMaskAnnotator:
         server_name: str = "0.0.0.0",
         server_port: int = 7860,
         mask_path: Optional[Path] = None,
+        # Optional optimization context for live preview
+        intrinsic: Optional[np.ndarray] = None,
+        link_poses_dataset: Optional[np.ndarray] = None,
+        meshes: Optional[List] = None,
+        initial_extrinsic_guess: Optional[np.ndarray] = None,
+        camera_mount_poses: Optional[np.ndarray] = None,
+        iterations: int = 5000,
+        early_stopping_steps: int = 200,
     ) -> None:
         self.images = images
         self.num_images = len(images)
@@ -77,6 +110,18 @@ class WebMaskAnnotator:
         self.done_event = threading.Event()
         self.server_name = server_name
         self.server_port = server_port
+        # Live preview state
+        self.optim_intrinsic = intrinsic
+        self.optim_link_poses_dataset = link_poses_dataset
+        self.optim_meshes = meshes
+        self.optim_initial_extrinsic_guess = initial_extrinsic_guess
+        self.optim_camera_mount_poses = camera_mount_poses
+        self.optim_iterations = iterations
+        self.optim_early_stopping = early_stopping_steps
+        self._renderer = None
+        self._link_vertices = None
+        self._link_faces = None
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
         # Build predictor once (headless-friendly)
         from sam2.build_sam import build_sam2
@@ -117,7 +162,12 @@ class WebMaskAnnotator:
             gr.Markdown("# Effortless Simple EasyHEC")
             with gr.Row():
                 with gr.Column(scale=3):
-                    image_view = gr.Image(label="Image", interactive=True)
+                    image_view = gr.Image(
+                        value=self.images[0],
+                        label="Image",
+                        interactive=True,
+                        type="numpy",
+                    )
                 with gr.Column():
                     idx = gr.Number(value=0, label="Image Index", precision=0)
                     label_radio = gr.Radio(
@@ -129,7 +179,29 @@ class WebMaskAnnotator:
                     btn_clear = gr.Button("Clear Points")
                     btn_generate = gr.Button("Generate Mask")
                     btn_accept = gr.Button("Accept Mask")
-                    btn_finish = gr.Button("Finish & Save")
+                    btn_save = gr.Button("Save Masks")
+                    btn_exit = gr.Button("Finish & Exit")
+
+            # Live optimization preview section
+            gr.Markdown("## Live Optimization Preview (best-improvement trajectory)")
+            with gr.Row():
+                with gr.Column(scale=3):
+                    opt_image = gr.Image(label="Overlay (Current Best Extrinsic)")
+                with gr.Column():
+                    opt_idx = gr.Number(
+                        value=0, label="Preview Image Index", precision=0
+                    )
+                    opt_info = gr.Textbox(label="Progress", interactive=False)
+                    btn_preview = gr.Button("Start Preview")
+            with gr.Row():
+                init_xyz = gr.Markdown("")
+            with gr.Row():
+                step_table = gr.Dataframe(
+                    headers=["step", "loss", "best_loss", "tx", "ty", "tz"],
+                    interactive=False,
+                    wrap=True,
+                    label="Prediction Steps",
+                )
 
             def load_image(i: float) -> np.ndarray:
                 i = int(i)
@@ -190,7 +262,7 @@ class WebMaskAnnotator:
                     i
                 ), f"Image {i}: mask accepted ({int(self.masks[i].sum())} px)"
 
-            def finish_and_save() -> str:
+            def save_masks() -> str:
                 # Ensure all masks exist; if any missing, fill with zeros shape(H,W)
                 H, W = self.images[0].shape[:2]
                 final_masks = []
@@ -203,8 +275,185 @@ class WebMaskAnnotator:
                 if self.mask_path is not None:
                     self.mask_path.parent.mkdir(parents=True, exist_ok=True)
                     np.save(self.mask_path, masks_np)
-                self.done_event.set()
                 return f"Saved masks to {self.mask_path if self.mask_path is not None else '(not saved)'}"
+
+            def finish_and_exit() -> str:
+                self.done_event.set()
+                return "Exiting and continuing calibration..."
+
+            # --- Live preview helpers ---
+            def _ensure_renderer_init():
+                if self._renderer is not None:
+                    return
+                if (
+                    self.optim_intrinsic is None
+                    or self.optim_link_poses_dataset is None
+                    or self.optim_meshes is None
+                    or self.optim_initial_extrinsic_guess is None
+                ):
+                    raise gr.Error("Optimization context not available yet.")
+                H, W = self.images[0].shape[:2]
+                self._renderer = NVDiffrastRenderer(H, W)
+                # Prepare tensors
+                self._link_vertices = [
+                    torch.from_numpy(mesh.vertices.copy()).float().to(self._device)
+                    for mesh in self.optim_meshes
+                ]
+                self._link_faces = [
+                    torch.from_numpy(mesh.faces.copy()).int().to(self._device)
+                    for mesh in self.optim_meshes
+                ]
+
+            def _render_mask_from_extrinsic(
+                extr_np: np.ndarray, img_i: int
+            ) -> np.ndarray:
+                _ensure_renderer_init()
+                H, W = self.images[0].shape[:2]
+                mask = torch.zeros((H, W), device=self._device)
+                intrinsic_t = (
+                    torch.from_numpy(self.optim_intrinsic).float().to(self._device)
+                )
+                link_poses_t = (
+                    torch.from_numpy(self.optim_link_poses_dataset[img_i])
+                    .float()
+                    .to(self._device)
+                )
+                extrinsic_t = torch.from_numpy(extr_np).float().to(self._device)
+                if self.optim_camera_mount_poses is not None:
+                    mount_pose = (
+                        torch.from_numpy(self.optim_camera_mount_poses[img_i])
+                        .float()
+                        .to(self._device)
+                    )
+                    extrinsic_t = extrinsic_t @ mount_pose
+                for j in range(len(self._link_vertices)):
+                    link_mask = self._renderer.render_mask(
+                        self._link_vertices[j],
+                        self._link_faces[j],
+                        intrinsic_t,
+                        extrinsic_t @ link_poses_t[j],
+                    )
+                    mask[link_mask > 0] = 1
+                return mask.detach().cpu().numpy()
+
+            def _overlay(
+                image: np.ndarray, mask: np.ndarray, color=(255, 0, 0), alpha=0.5
+            ):
+                m = mask.astype(bool)
+                out = image.copy()
+                if m.any():
+                    overlay = np.full_like(out, color)
+                    out[m] = ((1 - alpha) * out[m] + alpha * overlay[m]).astype(
+                        np.uint8
+                    )
+                return out
+
+            def start_preview(preview_idx: float):
+                i_img = int(preview_idx)
+                # Call optimizer in history mode to get best-improvement trajectory
+                if (
+                    self.optim_intrinsic is None
+                    or self.optim_link_poses_dataset is None
+                    or self.optim_initial_extrinsic_guess is None
+                    or self.mask_path is None
+                ):
+                    raise gr.Error(
+                        "Missing masks or optimization context. Save masks first."
+                    )
+                _ensure_renderer_init()
+
+                # Build tensors for streaming
+                intrinsic_t = (
+                    torch.from_numpy(self.optim_intrinsic).float().to(self._device)
+                )
+                link_poses_t = (
+                    torch.from_numpy(self.optim_link_poses_dataset)
+                    .float()
+                    .to(self._device)
+                )
+                masks_np = np.load(self.mask_path)
+                masks_t = torch.from_numpy(masks_np).float().to(self._device)
+                init_extr_t = (
+                    torch.from_numpy(self.optim_initial_extrinsic_guess)
+                    .float()
+                    .to(self._device)
+                )
+                mount_poses_t = (
+                    torch.from_numpy(self.optim_camera_mount_poses)
+                    .float()
+                    .to(self._device)
+                    if self.optim_camera_mount_poses is not None
+                    else None
+                )
+
+                hist = optimize_streaming(
+                    initial_extrinsic_guess=init_extr_t,
+                    camera_intrinsic=intrinsic_t,
+                    masks=masks_t,
+                    link_poses_dataset=link_poses_t,
+                    meshes=self.optim_meshes,
+                    camera_width=self.images.shape[2],
+                    camera_height=self.images.shape[1],
+                    camera_mount_poses=mount_poses_t,
+                    iterations=self.optim_iterations,
+                    early_stopping_steps=self.optim_early_stopping,
+                    verbose=True,
+                )
+
+                best_hist = hist["best_so_far_extrinsics"].detach().cpu().numpy()
+                losses = hist["losses"]
+                init_tx, init_ty, init_tz = self.optim_initial_extrinsic_guess[
+                    :3, 3
+                ].tolist()
+                init_text = f"**Initial translation**: tx={init_tx:.4f}, ty={init_ty:.4f}, tz={init_tz:.4f}"
+                if best_hist.shape[0] == 0:
+                    mask_prev = _render_mask_from_extrinsic(
+                        self.optim_initial_extrinsic_guess, i_img
+                    )
+                    rows = [
+                        [
+                            0,
+                            losses[0] if len(losses) else None,
+                            losses[0] if len(losses) else None,
+                            *self.optim_initial_extrinsic_guess[:3, 3].tolist(),
+                        ]
+                    ]
+                    yield (
+                        _overlay(self.images[i_img], mask_prev),
+                        "no improvement",
+                        0,
+                        init_text,
+                        rows,
+                    )
+                    return
+                rows = []
+                best_loss_so_far = float("inf")
+                for step_i, extr_np in enumerate(best_hist):
+                    # Overlay initial (blue edges) + best (red fill + edges)
+                    mask_init = _render_mask_from_extrinsic(
+                        self.optim_initial_extrinsic_guess, i_img
+                    )
+                    mask_best = _render_mask_from_extrinsic(extr_np, i_img)
+                    base = self.images[i_img].copy()
+                    # initial as blue edges
+                    edges = cv2.Canny((mask_init.astype(np.uint8) * 255), 50, 150)
+                    base[edges > 0] = (30, 144, 255)
+                    # best as red fill
+                    overlay_img = _overlay(
+                        base, mask_best, color=(255, 0, 0), alpha=0.5
+                    )
+                    loss_i = float(losses[step_i]) if step_i < len(losses) else None
+                    if loss_i is not None:
+                        best_loss_so_far = min(best_loss_so_far, loss_i)
+                    tx, ty, tz = extr_np[:3, 3].tolist()
+                    rows.append([step_i, loss_i, best_loss_so_far, tx, ty, tz])
+                    yield (
+                        overlay_img,
+                        f"step {step_i + 1}/{best_hist.shape[0]}",
+                        step_i,
+                        init_text,
+                        rows,
+                    )
 
             # Wiring
             idx.change(load_image, inputs=idx, outputs=image_view)
@@ -214,10 +463,18 @@ class WebMaskAnnotator:
             btn_next.click(next_, inputs=idx, outputs=[idx, image_view, status])
             btn_generate.click(generate_mask, inputs=idx, outputs=[image_view, status])
             btn_accept.click(accept_mask, inputs=idx, outputs=[image_view, status])
-            btn_finish.click(finish_and_save, outputs=status)
+            btn_save.click(save_masks, outputs=status)
+            btn_exit.click(finish_and_exit, outputs=status)
+            btn_preview.click(
+                start_preview,
+                inputs=opt_idx,
+                outputs=[opt_image, opt_info, opt_idx, init_xyz, step_table],
+            )
 
             # Initial image
             image_view.value = self.images[0]
+            # Initial preview image
+            opt_image.value = self.images[0]
 
         return demo
 
@@ -261,6 +518,9 @@ class SO101WebArgs(Args):
     # Web UI options
     server_port: int = 7860
     server_name: str = "0.0.0.0"
+    opencv_intrinsics_path: Optional[str] = None
+    opencv_hfov_deg: Optional[float] = None
+    opencv_vfov_deg: Optional[float] = None
 
 
 def main(args: SO101WebArgs):
@@ -327,19 +587,26 @@ def main(args: SO101WebArgs):
             )
         else:
             try:
+                # Hard-coded intrinsics for 5mm on IMX323 at 640x480
+                # Base K_640x480 ≈ [[595.9, 0, 320], [0, 794.7, 240], [0, 0, 1]]
                 frame = cam.async_read()
                 height, width = frame.shape[:2]
-                fx = fy = 0.8 * max(width, height)
-                cx = width / 2.0
-                cy = height / 2.0
-                intrinsics[cam_name] = np.array(
-                    [
-                        [fx, 0, cx],
-                        [0, fy, cy],
-                        [0, 0, 1],
-                    ]
+                K_base = np.array(
+                    [[595.9, 0.0, 320.0], [0.0, 794.7, 240.0], [0.0, 0.0, 1.0]],
+                    dtype=np.float32,
                 )
-            except Exception:
+                if width == 640 and height == 480:
+                    intrinsics[cam_name] = K_base
+                else:
+                    # Scale hard-coded intrinsics if the resolution differs
+                    intrinsics[cam_name] = scale_intrinsics(
+                        K_base, 640, 480, width, height
+                    )
+                print(
+                    f"[{cam_name}] Using hard-coded OpenCV intrinsics (5mm) scaled to {width}x{height}:\n{intrinsics[cam_name]}"
+                )
+            except Exception as e:
+                print(f"Failed to set hard-coded OpenCV intrinsics for {cam_name}: {e}")
                 pass
 
     # Collect data (images + link poses)
@@ -487,6 +754,13 @@ def main(args: SO101WebArgs):
                 server_name=args.server_name,
                 server_port=args.server_port,
                 mask_path=mask_path,
+                intrinsic=intrinsic,
+                link_poses_dataset=link_poses_dataset,
+                meshes=meshes,
+                initial_extrinsic_guess=initial_extrinsic_guess,
+                camera_mount_poses=camera_mount_poses,
+                iterations=args.train_steps,
+                early_stopping_steps=args.early_stopping_steps,
             )
             masks = annotator.launch_and_wait()
             np.save(mask_path, masks)

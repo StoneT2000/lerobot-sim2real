@@ -31,7 +31,9 @@ from dataclasses import dataclass
 import threading
 
 # Import the environment to register it with gymnasium
-from lerobot_sim2real.env.tasks.digit_twins.so101_arm.grasp_cube import SO101GraspCubeEnv
+from lerobot_sim2real.env.tasks.digit_twins.so101_arm.grasp_cube import (
+    SO101GraspCubeEnv,
+)
 
 
 @dataclass

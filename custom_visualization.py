@@ -23,7 +23,11 @@ def visualize_extrinsic_results_red_mask(
     labels: List[str] = [],
     output_dir="results/",
     return_rgb: bool = False,
-    mask_color: tuple = (255, 0, 0),  # Red color in RGB
+    mask_color: tuple = (255, 0, 0),  # Red color in RGB (fallback)
+    mask_colors: Optional[List[tuple]] = None,  # Per-extrinsic colors (RGB)
+    fill_alpha: float = 0.5,
+    overlay_edges: bool = True,
+    edge_thickness: int = 2,
 ):
     """
     Visualizes a given list of extrinsic matrices and draws the mask cameras at those extrinsics would project on the original RGB images.
@@ -73,24 +77,62 @@ def visualize_extrinsic_results_red_mask(
             mask[link_mask > 0] = 1
         return mask
 
-    def apply_red_mask_overlay(image, mask, alpha=0.6):
-        """Apply red mask overlay to image"""
+    def apply_mask_overlay(
+        image: np.ndarray,
+        mask: np.ndarray,
+        color: tuple,
+        alpha: float,
+        draw_edges: bool,
+        edge_px: int,
+    ) -> np.ndarray:
+        """Apply a colored fill + optional edge outline overlay to the input image where mask==1."""
+        mask_bool = mask.astype(bool)
         result = image.copy()
-        mask_3d = np.stack([mask, mask, mask], axis=2)
-        red_overlay = np.full_like(image, mask_color)
-        result = (1 - alpha) * result + alpha * red_overlay
-        result = result * mask_3d + image * (1 - mask_3d)
-        return result.astype(np.uint8)
+        if mask_bool.any():
+            # Fill overlay
+            if alpha > 0:
+                overlay = np.full_like(result, color)
+                result[mask_bool] = (
+                    (1 - alpha) * result[mask_bool] + alpha * overlay[mask_bool]
+                ).astype(np.uint8)
+            # Edge outline for visibility
+            if draw_edges:
+                edges = cv2.Canny((mask_bool.astype(np.uint8) * 255), 50, 150)
+                if edge_px > 1:
+                    k = max(1, edge_px // 2)
+                    kernel = np.ones((k, k), np.uint8)
+                    edges = cv2.dilate(edges, kernel, iterations=1)
+                result[edges > 0] = color
+        return result
 
     for i in tqdm(range(len(images))):
         overlaid_images = []
+        # Choose per-extrinsic colors: default to blue for first, red for second, else cycle distinct hues
+        default_colors = [(30, 144, 255), (255, 0, 0), (255, 215, 0), (0, 255, 0)]
+        color_list = (
+            mask_colors
+            if mask_colors is not None and len(mask_colors) >= len(extrinsics)
+            else [
+                default_colors[j % len(default_colors)] for j in range(len(extrinsics))
+            ]
+        )
+
         for j in range(len(extrinsics)):
             if camera_mount_poses is not None:
                 mask = get_mask_from_camera_pose(extrinsics[j] @ camera_mount_poses[i])
             else:
                 mask = get_mask_from_camera_pose(extrinsics[j])
             mask = mask.cpu().numpy()
-            overlaid_images.append(apply_red_mask_overlay(images[i], mask))
+            overlaid_images.append(
+                apply_mask_overlay(
+                    images[i],
+                    mask,
+                    color=color_list[j],
+                    alpha=fill_alpha,
+                    draw_edges=overlay_edges,
+                    edge_px=edge_thickness,
+                )
+            )
 
         num_subplots = len(extrinsics) + 1 if masks is not None else len(extrinsics)
 
@@ -102,11 +144,24 @@ def visualize_extrinsic_results_red_mask(
             ax = fig.add_subplot(1, num_subplots, j + 1)
             ax.imshow(overlaid_images[j])
             ax.axis("off")
-            ax.set_title(labels[j])
+            title = labels[j] if j < len(labels) else f"Extrinsic {j}"
+            ax.set_title(title)
+            # Color the subplot border to match the overlay color for clarity
+            for spine in ax.spines.values():
+                spine.set_edgecolor(np.array(color_list[j]) / 255.0)
+                spine.set_linewidth(3)
 
         if masks is not None:
             ax = fig.add_subplot(1, num_subplots, num_subplots)
-            reference_mask = apply_red_mask_overlay(images[i], masks[i])
+            # Show input masks (if provided) using green edges for contrast
+            reference_mask = apply_mask_overlay(
+                images[i],
+                masks[i],
+                color=(0, 255, 0),
+                alpha=0.25,
+                draw_edges=True,
+                edge_px=2,
+            )
             ax.imshow(reference_mask)
             ax.axis("off")
             ax.set_title("Masks")
