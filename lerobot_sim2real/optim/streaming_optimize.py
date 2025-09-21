@@ -4,7 +4,9 @@ import torch
 from tqdm import tqdm
 
 from .rb_solver_override import RBSolver, RBSolverConfig  # type: ignore
+
 # from easyhec.optim.rb_solver import RBSolver, RBSolverConfig  # type: ignore
+import torch.nn.functional as F
 
 
 @torch.no_grad()
@@ -22,11 +24,22 @@ def optimize_streaming(
     camera_height: int,
     camera_mount_poses: Optional[torch.Tensor] = None,
     iterations: int = 5000,
-    learning_rate: float = 3e-4,
-    batch_size: Optional[int] = None,
-    early_stopping_steps: int = 1000,
+    learning_rate: float = 1e-3,
+    batch_size: Optional[int] = 1,
+    early_stopping_steps: int = 300,
     verbose: bool = True,
     loss_multiplier: float = 1.0,
+    # Stabilization options
+    iou_loss_weight: float = 0.1,
+    grad_clip_norm: float = 1.0,
+    freeze_rotation_steps: int = 50,
+    warmup_first_sample_steps: int = 200,
+    # Two-phase LR schedule
+    lr_phase1: float = 2e-3,
+    lr_phase2: float = 5e-4,
+    phase1_steps: int = 200,
+    # Center-of-mass alignment weight (0 to disable)
+    com_loss_weight: float = 0.2,
 ) -> Dict[str, Any]:
     """
     Variant of easyhec.optim.optimize that returns per-step histories for visualization.
@@ -68,19 +81,102 @@ def optimize_streaming(
     for i in pbar:
         if batch_size is None:
             batch = dataset
+            bid = None
         else:
-            bid = torch.randperm(len(dataset["mask"]))[:batch_size]
+            # Build a safe batch: only index tensors that are sample-aligned (first dim == N)
+            N = len(dataset["mask"])  # number of samples
+            if i < warmup_first_sample_steps:
+                bid = torch.tensor([0])
+            else:
+                bid = torch.randperm(N)[:batch_size]
+
+            def maybe_index(name: str, value):
+                if (
+                    isinstance(value, torch.Tensor)
+                    and value.dim() >= 1
+                    and value.shape[0] == N
+                ):
+                    return value[bid]
+                return value
+
             batch = {
-                k: v[bid] if hasattr(v, "__getitem__") else v
-                for k, v in dataset.items()
+                "intrinsic": dataset["intrinsic"],
+                "link_poses": maybe_index("link_poses", dataset["link_poses"]),
+                "mask": maybe_index("mask", dataset["mask"]),
+                "mount_poses": maybe_index("mount_poses", dataset.get("mount_poses")),
             }
+
+        # Simple 2-phase LR schedule
+        if i == 0:
+            for g in optimizer.param_groups:
+                g["lr"] = lr_phase1
+        elif i == phase1_steps:
+            for g in optimizer.param_groups:
+                g["lr"] = lr_phase2
 
         output = solver(batch)
         optimizer.zero_grad()
-        (output["mask_loss"] * loss_multiplier).backward()
+
+        # Mild smoothing on prediction to improve gradient signal
+        pred_raw = output["rendered_masks"].float()
+        pred = F.avg_pool2d(
+            pred_raw.unsqueeze(1), kernel_size=3, stride=1, padding=1
+        ).squeeze(1)
+        ref = output["ref_masks"].float()
+
+        # Recompute MSE with smoothed pred
+        mse_loss = F.mse_loss(pred, ref)
+        total_loss = mse_loss * loss_multiplier
+        if iou_loss_weight > 0:
+            # Blend with soft IoU (Dice/IoU-like) to reduce shrinking/expanding degeneracies
+            eps = 1e-6
+            inter = (pred * ref).sum(dim=(1, 2))
+            union = (pred + ref - pred * ref).sum(dim=(1, 2))
+            soft_iou = (inter + eps) / (union + eps)
+            iou_loss = 1.0 - soft_iou.mean()
+            total_loss = (
+                1.0 - iou_loss_weight
+            ) * total_loss + iou_loss_weight * iou_loss
+
+        # Center-of-mass alignment to improve large-offset gradients
+        if com_loss_weight > 0:
+            B, H, W = pred.shape
+            device_b = pred.device
+            ys = torch.arange(0, H, device=device_b).float().view(-1, 1).repeat(1, W)
+            xs = torch.arange(0, W, device=device_b).float().view(1, -1).repeat(H, 1)
+            xs = xs.unsqueeze(0).expand(B, -1, -1)
+            ys = ys.unsqueeze(0).expand(B, -1, -1)
+            eps = 1e-6
+            pred_m = pred.clamp(min=0.0)
+            ref_m = ref.clamp(min=0.0)
+            pred_mass = pred_m.sum(dim=(1, 2)) + eps
+            ref_mass = ref_m.sum(dim=(1, 2)) + eps
+            pred_cx = (pred_m * xs).sum(dim=(1, 2)) / pred_mass
+            pred_cy = (pred_m * ys).sum(dim=(1, 2)) / pred_mass
+            ref_cx = (ref_m * xs).sum(dim=(1, 2)) / ref_mass
+            ref_cy = (ref_m * ys).sum(dim=(1, 2)) / ref_mass
+            com_l2 = ((pred_cx - ref_cx) ** 2 + (pred_cy - ref_cy) ** 2) / (W**2 + H**2)
+            com_loss = com_l2.mean()
+            total_loss = (
+                1.0 - com_loss_weight
+            ) * total_loss + com_loss_weight * com_loss
+
+        total_loss.backward()
+
+        # Optionally freeze rotation (last 3 dof) for initial steps to prevent early drift
+        if (
+            i < freeze_rotation_steps
+            and hasattr(solver, "dof")
+            and solver.dof.grad is not None
+        ):
+            solver.dof.grad[3:] = 0.0
+
+        # Gradient clipping for stability
+        if grad_clip_norm is not None and grad_clip_norm > 0:
+            torch.nn.utils.clip_grad_norm_(solver.parameters(), grad_clip_norm)
         optimizer.step()
 
-        loss_value = float(output["mask_loss"].item())
+        loss_value = float(total_loss.item())
         losses.append(loss_value)
 
         current_pred = solver.get_predicted_extrinsic()

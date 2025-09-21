@@ -1,4 +1,5 @@
 {
+    "uid": "so101",
     "base_camera_settings": {
         "extrinsics": "results/so101/so101_follower/base_camera/camera_extrinsic_ros.npy",
         "intrinsics": "results/so101/so101_follower/base_camera/camera_intrinsic_128x128.npy",

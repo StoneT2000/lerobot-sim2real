@@ -125,7 +125,8 @@ class RBSolver(nn.Module):
                 all_link_si = torch.stack(all_link_si)
             all_link_si = all_link_si.sum(0).clamp(max=1)
             all_frame_all_link_si.append(all_link_si)
-            loss = torch.sum((all_link_si - masks_ref[bid]) ** 2)
+            # Use mean squared error to stabilize scale across resolutions
+            loss = torch.mean((all_link_si - masks_ref[bid]) ** 2)
             losses.append(loss)
 
         loss = torch.stack(losses).mean()

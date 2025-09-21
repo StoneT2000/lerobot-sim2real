@@ -21,11 +21,11 @@ from lerobot.cameras.realsense import RealSenseCamera
 
 from lerobot.motors.motors_bus import MotorNormMode
 from lerobot.robots.so101_follower.so101_follower import SO101Follower
+from lerobot.robots.so100_follower.so100_follower import SO100Follower
 from transforms3d.euler import euler2mat
 from urchin import URDF
 
 from easyhec.examples.real.base import Args
-from easyhec.optim.optimize import optimize
 from easyhec.utils.camera_conversions import opencv2ros, ros2opencv
 from easyhec.utils.utils_3d import merge_meshes
 import cv2
@@ -40,6 +40,8 @@ from easyhec.optim.nvdiffrast_renderer import NVDiffrastRenderer
 from lerobot_sim2real.config.real_robot import create_real_robot
 from lerobot_sim2real.utils.camera import scale_intrinsics
 from lerobot_sim2real.optim.streaming_optimize import optimize_streaming, optimize_final
+
+from easyhec import ROBOT_DEFINITIONS_DIR
 
 
 def _k_from_fov(
@@ -159,7 +161,7 @@ class WebMaskAnnotator:
 
     def _build_ui(self) -> gr.Blocks:
         with gr.Blocks() as demo:
-            gr.Markdown("# Effortless Simple EasyHEC")
+            gr.Markdown("# Simple EasyHEC")
             with gr.Row():
                 with gr.Column(scale=3):
                     image_view = gr.Image(
@@ -183,7 +185,7 @@ class WebMaskAnnotator:
                     btn_exit = gr.Button("Finish & Exit")
 
             # Live optimization preview section
-            gr.Markdown("## Live Optimization Preview (best-improvement trajectory)")
+            gr.Markdown("## Optimization Preview")
             with gr.Row():
                 with gr.Column(scale=3):
                     opt_image = gr.Image(label="Overlay (Current Best Extrinsic)")
@@ -193,17 +195,6 @@ class WebMaskAnnotator:
                     )
                     opt_info = gr.Textbox(label="Progress", interactive=False)
                     btn_preview = gr.Button("Start Preview")
-            with gr.Row():
-                with gr.Column():
-                    invert_extr = gr.Checkbox(
-                        value=True, label="Invert extrinsic for rendering"
-                    )
-                with gr.Column():
-                    swap_order = gr.Checkbox(
-                        value=False, label="Swap composition order (T @ L -> L @ T)"
-                    )
-                with gr.Column():
-                    lr_preview = gr.Number(value=3e-4, label="Preview learning rate")
             with gr.Row():
                 init_xyz = gr.Markdown("")
             with gr.Row():
@@ -359,7 +350,7 @@ class WebMaskAnnotator:
                     )
                 return out
 
-            def start_preview(preview_idx: float, inv_ex: bool, swp: bool, lr: float):
+            def start_preview(preview_idx: float, lr: float = 3e-3):
                 i_img = int(preview_idx)
                 # Call optimizer in history mode to get best-improvement trajectory
                 if (
@@ -479,7 +470,7 @@ class WebMaskAnnotator:
             btn_exit.click(finish_and_exit, outputs=status)
             btn_preview.click(
                 start_preview,
-                inputs=[opt_idx, invert_extr, swap_order, lr_preview],
+                inputs=[opt_idx],
                 outputs=[opt_image, opt_info, opt_idx, init_xyz, step_table],
             )
 
@@ -544,10 +535,12 @@ def main(args: SO101WebArgs):
         "wrist_roll": 0,
         "gripper": 0,
     }
+
     if args.env_kwargs_json_path is not None:
         with open(args.env_kwargs_json_path, "r") as f:
             data = json.load(f)
             CALIBRATION_OFFSET = data.pop("calibration_offset")
+            uid = data.pop("uid")
 
     user_tuned_calibration_offset = any(
         CALIBRATION_OFFSET[k] != 0 for k in CALIBRATION_OFFSET.keys()
@@ -557,7 +550,7 @@ def main(args: SO101WebArgs):
             "The calibration offset for sim2real/real2sim is not tuned!! Unless you are absolutely sure you will most likely get poor results."
         )
 
-    robot: SO101Follower = create_real_robot("so101")
+    robot: SO101Follower = create_real_robot(uid)
     robot_id = robot.id if robot.id is not None else "default"
     robot.bus.motors["gripper"].norm_mode = MotorNormMode.DEGREES
     robot.connect()
@@ -631,7 +624,7 @@ def main(args: SO101WebArgs):
         "gripper.pos",
     ]
 
-    def get_qpos(robot: SO101Follower, flat: bool = True):
+    def get_qpos(robot: SO101Follower | SO100Follower, flat: bool = True):
         obs = robot.bus.sync_read("Present_Position")
         for k in CALIBRATION_OFFSET.keys():
             obs[k] = obs[k] - CALIBRATION_OFFSET[k]
@@ -645,7 +638,7 @@ def main(args: SO101WebArgs):
         joint_positions = np.array(joint_positions)
         return joint_positions
 
-    def set_target_qpos(robot: SO101Follower, qpos: np.ndarray):
+    def set_target_qpos(robot: SO101Follower | SO100Follower, qpos: np.ndarray):
         action = {}
         for name, qpos_val in zip(joint_position_names, qpos):
             action[name] = (
@@ -653,11 +646,23 @@ def main(args: SO101WebArgs):
             )
         robot.send_action(action)
 
-    robot_def_path = (
-        Path(__file__).parent.parent / "assets" / "robots" / "so101" / "so101.urdf"
-    )
-    print(f"Robot definition path: {robot_def_path}")
-    robot_urdf = URDF.load(str(robot_def_path))
+    # robot_def_path = (
+    #     Path(__file__).parent.parent / "assets" / "robots" / "so101" / "so101.urdf"
+    # )
+    # print(f"Robot definition path: {robot_def_path}")
+    # robot_urdf = URDF.load(str(robot_def_path))
+
+    if uid == "so100":
+        robot_def_path = ROBOT_DEFINITIONS_DIR / "so100"
+        robot_urdf = URDF.load(str(robot_def_path / "so100.urdf"))
+    elif uid == "so101":
+        robot_def_path = (
+            Path(__file__).parent.parent / "assets" / "robots" / "so101" / "so101.urdf"
+        )
+        print(f"Robot definition path: {robot_def_path}")
+        robot_urdf = URDF.load(str(robot_def_path))
+    else:
+        raise ValueError(f"Unknown robot uid: {uid}. Supported: 'so100', 'so101'")
 
     meshes = []
     mesh_link_names = []
@@ -756,7 +761,7 @@ def main(args: SO101WebArgs):
         camera_width = images.shape[2]
         camera_height = images.shape[1]
 
-        mask_path = Path(args.output_dir) / robot_id / k / f"mask.npy"
+        mask_path = Path(args.output_dir) / robot_id / k / "mask.npy"
         if args.use_previous_captures and mask_path.exists():
             print(f"Using previous mask from {mask_path}")
             masks = np.load(mask_path)
@@ -799,7 +804,7 @@ def main(args: SO101WebArgs):
                     else None
                 ),
                 iterations=args.train_steps,
-                learning_rate=3e-4,
+                learning_rate=3e-3,
                 early_stopping_steps=args.early_stopping_steps,
                 verbose=False,
             )
