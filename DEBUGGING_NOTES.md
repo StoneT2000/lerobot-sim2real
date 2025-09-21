@@ -9,3 +9,29 @@ Fast sanity checks:
 Print masks_ref[0].sum() and rendered_masks[0].sum() once; if the latter is ~0, you’re off-screen.
 Try preview with: invert OFF, swap ON. If IoU jumps above 0, you’ve confirmed the order/convention mismatch.
 Recheck intrinsics (fx, fy, cx, cy) printed values and ensure NVDiffrastRenderer(H, W) matches (H, W) ordering expected by your renderer.
+
+### SO101-specific checks that matter
+
+- **Joint zero alignment**:
+
+  - Tune `CALIBRATION_OFFSET` for SO101. Even if limits are similar, SO101’s actual zero vs URDF zero can differ, especially at elbow/shoulder due to different joint frames.
+  - If a joint consistently looks mirrored in overlays, introduce a sign map (e.g., `JOINT_SIGN["shoulder_pan"] = -1`) before building `cfg`.
+
+- **Joint axes and frames**:
+
+  - SO101 uses mostly `axis="0 0 1"` with non-trivial joint `origin rpy`. If your bus angles were implicitly matched to SO100’s axes, you may need a sign flip on one or two joints for SO101.
+
+- **qpos samples within limits**:
+
+  - Current samples are conservative, but verify against SO101 limits (e.g., `wrist_roll` ≈ ±2.93 rad). If a sample violates a limit in practice, use slightly smaller magnitudes to avoid edge cases.
+
+- **Initial extrinsic guess**:
+
+  - Because the SO101 base frame differs from SO100, adjust the initial guess if overlays look globally shifted/tilted. The current guess is reasonable; try nudging yaw/height if optimization stalls.
+
+- **Mesh silhouette differences**:
+
+  - The gripper geometry is different. Re-generate masks for SO101; don’t reuse SO100 masks. A mismatch will force the optimizer to “explain” geometry with a wrong camera pose.
+
+- **FK configuration build**:
+  - The `cfg` uses `urdf.joint_map` and defaults others to 0, which is correct. Ensure the six servo joints from the bus match those joint names (they do for SO101).
