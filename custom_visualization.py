@@ -118,8 +118,8 @@ def visualize_extrinsic_results_red_mask(
 
     for i in tqdm(range(len(images))):
         overlaid_images = []
-        # Choose per-extrinsic colors: default to blue for first, red for second, else cycle distinct hues
-        default_colors = [(30, 144, 255), (255, 0, 0), (255, 215, 0), (0, 255, 0)]
+        # Choose per-extrinsic colors: default to blue for first, green for second, else cycle distinct hues
+        default_colors = [(30, 144, 255), (0, 255, 0), (255, 215, 0), (255, 0, 0)]
         color_list = (
             mask_colors
             if mask_colors is not None and len(mask_colors) >= len(extrinsics)
@@ -165,12 +165,12 @@ def visualize_extrinsic_results_red_mask(
 
         if masks is not None:
             ax = fig.add_subplot(1, num_subplots, num_subplots)
-            # Show input masks (if provided) using green edges for contrast
+            # Show input masks (if provided) using requested mask_color
             reference_mask = apply_mask_overlay(
                 images[i],
                 masks[i],
-                color=(0, 255, 0),
-                alpha=0.25,
+                color=mask_color,
+                alpha=0.4,
                 draw_edges=True,
                 edge_px=2,
             )

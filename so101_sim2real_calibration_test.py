@@ -18,6 +18,7 @@ import time
 import signal
 import sys
 from typing import Optional
+from pathlib import Path
 import gymnasium as gym
 import torch
 import numpy as np
@@ -62,6 +63,24 @@ class SO101CalibrationTester:
             "gripper",
         ]
         self.calibration_data = {joint: CalibrationData() for joint in self.joint_names}
+        # Load calibration offsets (degrees) from env_config.json if present
+        self.offset_deg = {j: 0.0 for j in self.joint_names}
+        try:
+            cfg_path = Path(__file__).parent / "env_config.json"
+            if cfg_path.exists():
+                with cfg_path.open("r") as f:
+                    cfg = json.load(f)
+                if isinstance(cfg, dict) and "calibration_offset" in cfg:
+                    for j, v in cfg["calibration_offset"].items():
+                        if j in self.offset_deg and isinstance(v, (int, float)):
+                            self.offset_deg[j] = float(v)
+                print(f"Loaded calibration offsets (deg): {self.offset_deg}")
+            else:
+                print(
+                    "No env_config.json found next to this script; using zero offsets."
+                )
+        except Exception as e:
+            print(f"Warning: failed to load calibration offsets: {e}")
         self.setup_signal_handlers()
 
     def setup_signal_handlers(self):
@@ -161,7 +180,10 @@ class SO101CalibrationTester:
             qpos = []
             for joint_name in self.joint_names:
                 if joint_name in joint_positions:
-                    angle_deg = joint_positions[joint_name]
+                    # Apply calibration offset in degrees before converting to radians
+                    angle_deg = joint_positions[joint_name] - self.offset_deg.get(
+                        joint_name, 0.0
+                    )
                     angle_rad = np.deg2rad(angle_deg)
                     qpos.append(angle_rad)
                 else:
