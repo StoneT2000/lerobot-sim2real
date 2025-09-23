@@ -338,6 +338,15 @@ class PaperWebAnnotator:
                     f"Step {int(steps[k])} (loss={float(losses[k]):.2f})" for k in sel
                 ]
 
+                # Prepend initial guess (blue) and set all steps to green
+                extrinsics_vis = np.concatenate(
+                    [self.initial_extrinsic[None, ...], extrinsics_vis], axis=0
+                )
+                labels = ["Initial Guess"] + labels
+                per_extrinsic_colors = [(30, 144, 255)] + [
+                    (0, 255, 0) for _ in range(len(extrinsics_vis) - 1)
+                ]
+
                 _ = _vis_extrinsic_red_mask(
                     images=np.stack([self.image]),
                     link_poses_dataset=self.link_poses_dataset,
@@ -348,7 +357,8 @@ class PaperWebAnnotator:
                     labels=labels,
                     output_dir=str(self.output_dir),
                     return_rgb=False,
-                    mask_color=(0, 255, 0),
+                    mask_color=(255, 0, 0),
+                    mask_colors=per_extrinsic_colors,
                 )
 
                 # Save visualization, then copy to timestamped paper_type filename
