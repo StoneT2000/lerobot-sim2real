@@ -22,7 +22,6 @@ import tyro
 from transforms3d.euler import euler2mat
 
 from easyhec.examples.real.base import Args
-from easyhec.optim.optimize import optimize
 
 # from easyhec.utils import visualization
 from easyhec.utils.camera_conversions import opencv2ros, ros2opencv
@@ -32,7 +31,7 @@ from sam2.build_sam import build_sam2
 from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 # For multi-start optimization with loss tracking
-from lerobot_sim2real.optim.streaming_optimize import optimize_streaming
+from lerobot_sim2real.optim.optimize_with_better_logging import optimize
 # Defer importing custom_visualization until runtime to avoid sys.path issues
 
 
@@ -222,7 +221,7 @@ class PaperWebAnnotator:
                     )
                     status = gr.Textbox(label="Status", interactive=False)
                     interval_input = gr.Number(
-                        value=10, label="Visualization interval (steps)", precision=0
+                        value=100, label="Visualization interval (steps)", precision=0
                     )
                     btn_clear = gr.Button("Clear Points")
                     btn_generate = gr.Button("Generate Mask")
@@ -283,30 +282,32 @@ class PaperWebAnnotator:
                 # Prepare IO
                 self.output_dir.mkdir(parents=True, exist_ok=True)
                 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-                # Optimize (single run)
-                predicted_camera_extrinsic_opencv = (
-                    optimize(
-                        camera_intrinsic=torch.from_numpy(self.K).float().to(device),
-                        masks=torch.from_numpy(np.stack([self.mask]))
-                        .float()
-                        .to(device),
-                        link_poses_dataset=torch.from_numpy(self.link_poses_dataset)
-                        .float()
-                        .to(device),
-                        initial_extrinsic_guess=torch.from_numpy(self.initial_extrinsic)
-                        .float()
-                        .to(device),
-                        meshes=self.meshes,
-                        camera_width=self.camera_width,
-                        camera_height=self.camera_height,
-                        camera_mount_poses=None,
-                        gt_camera_pose=None,
-                        iterations=self.train_steps,
-                        early_stopping_steps=self.early_stopping_steps,
-                    )
-                    .cpu()
-                    .numpy()
+                history = optimize(
+                    camera_intrinsic=torch.from_numpy(self.K).float().to(device),
+                    masks=torch.from_numpy(np.stack([self.mask])).float().to(device),
+                    link_poses_dataset=torch.from_numpy(self.link_poses_dataset)
+                    .float()
+                    .to(device),
+                    initial_extrinsic_guess=torch.from_numpy(self.initial_extrinsic)
+                    .float()
+                    .to(device),
+                    meshes=self.meshes,
+                    camera_width=self.camera_width,
+                    camera_height=self.camera_height,
+                    camera_mount_poses=None,
+                    gt_camera_pose=None,
+                    iterations=self.train_steps,
+                    early_stopping_steps=self.early_stopping_steps,
+                    return_history=True,
                 )
+
+                print("optimization completed, saving results and visualization")
+
+                # Take the last best item
+                predicted_camera_extrinsic_opencv = (
+                    history["best_extrinsics"][-1].cpu().numpy()
+                )
+
                 # Save npy results
                 np.save(
                     self.output_dir / "camera_extrinsic_opencv.npy",
@@ -321,76 +322,34 @@ class PaperWebAnnotator:
                 )
                 np.save(self.output_dir / "camera_intrinsic.npy", self.K)
 
-                # Visualize with initial + few best steps at chosen interval + final
-                if _vis_extrinsic_red_mask is not None:
-                    try:
-                        extr_list = [self.initial_extrinsic]
-                        labels = ["Initial Extrinsic Guess"]
-                        # Short streaming run to capture early steps
-                        try:
-                            interval = int(interval_val) if interval_val else 50
-                            if interval <= 0:
-                                interval = 50
-                            # Run enough steps to ensure requested checkpoints exist
-                            vis_iters = min(self.train_steps, max(1000, interval * 3))
-                            hist_vis = optimize_streaming(
-                                initial_extrinsic_guess=torch.from_numpy(
-                                    self.initial_extrinsic
-                                )
-                                .float()
-                                .to(device),
-                                camera_intrinsic=torch.from_numpy(self.K)
-                                .float()
-                                .to(device),
-                                masks=torch.from_numpy(np.stack([self.mask]))
-                                .float()
-                                .to(device),
-                                link_poses_dataset=torch.from_numpy(
-                                    self.link_poses_dataset
-                                )
-                                .float()
-                                .to(device),
-                                meshes=self.meshes,
-                                camera_width=self.camera_width,
-                                camera_height=self.camera_height,
-                                camera_mount_poses=None,
-                                iterations=vis_iters,
-                                learning_rate=3e-3,
-                                # Disable early stopping for visualization (run full vis_iters)
-                                early_stopping_steps=vis_iters,
-                                verbose=False,
-                            )
-                            cur_hist_t = hist_vis.get("current_extrinsics")
-                            if cur_hist_t is not None and cur_hist_t.shape[0] > 0:
-                                max_idx = int(cur_hist_t.shape[0])
-                                for step in [interval, interval * 2, interval * 3]:
-                                    idx = step - 1
-                                    if 0 <= idx < max_idx:
-                                        extr_list.append(
-                                            cur_hist_t[idx].detach().cpu().numpy()
-                                        )
-                                        labels.append(f"Step {step}")
-                        except Exception:
-                            pass
+                print("_vis_extrinsic_red_mask:", _vis_extrinsic_red_mask)
 
-                        extr_list.append(predicted_camera_extrinsic_opencv)
-                        labels.append("Predicted Extrinsic")
+                # Evenly sample up to 50 best extrinsics and label with step and loss
+                best_extrinsics_np = history["best_extrinsics"].cpu().numpy()
+                steps = np.array(history["best_extrinsics_step"], dtype=int)
+                losses = np.array(history["best_extrinsics_losses"], dtype=float)
+                m = len(steps)
+                if m <= 50:
+                    sel = np.arange(m)
+                else:
+                    sel = np.unique(np.round(np.linspace(0, m - 1, 50)).astype(int))
+                extrinsics_vis = best_extrinsics_np[sel]
+                labels = [
+                    f"Step {int(steps[k])} (loss={float(losses[k]):.2f})" for k in sel
+                ]
 
-                        _ = _vis_extrinsic_red_mask(
-                            images=np.stack([self.image]),
-                            link_poses_dataset=self.link_poses_dataset,
-                            meshes=self.meshes,
-                            intrinsic=self.K,
-                            extrinsics=np.stack(extr_list),
-                            masks=np.stack([self.mask]),
-                            labels=labels,
-                            output_dir=str(self.output_dir),
-                            return_rgb=False,
-                            mask_color=(0, 255, 0),
-                        )
-                    except Exception:
-                        # Do not fail UI if visualization has issues; proceed with saving pose only
-                        pass
+                _ = _vis_extrinsic_red_mask(
+                    images=np.stack([self.image]),
+                    link_poses_dataset=self.link_poses_dataset,
+                    meshes=self.meshes,
+                    intrinsic=self.K,
+                    extrinsics=extrinsics_vis,
+                    masks=np.stack([self.mask]),
+                    labels=labels,
+                    output_dir=str(self.output_dir),
+                    return_rgb=False,
+                    mask_color=(0, 255, 0),
+                )
 
                 # Save visualization, then copy to timestamped paper_type filename
                 ts = time.strftime("%Y%m%d_%H%M%S")

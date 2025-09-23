@@ -146,14 +146,15 @@ def visualize_extrinsic_results_red_mask(
                 )
             )
 
-        num_subplots = len(extrinsics) + 1 if masks is not None else len(extrinsics)
+        # Arrange subplots in a grid layout with 10 items per row
+        num_tiles = len(extrinsics) + (1 if masks is not None else 0)
+        ncols = 10 if num_tiles >= 10 else num_tiles
+        nrows = int(np.ceil(num_tiles / max(1, ncols)))
 
-        plt.rcParams.update(
-            {"font.size": 16}
-        )  # Increase font size for all text elements
-        fig = plt.figure(figsize=(7 * num_subplots, 8))
+        plt.rcParams.update({"font.size": 16})
+        fig = plt.figure(figsize=(6.5 * ncols, 6.5 * nrows))
         for j in range(len(extrinsics)):
-            ax = fig.add_subplot(1, num_subplots, j + 1)
+            ax = fig.add_subplot(nrows, ncols, j + 1)
             ax.imshow(overlaid_images[j])
             ax.axis("off")
             title = labels[j] if j < len(labels) else f"Extrinsic {j}"
@@ -164,7 +165,7 @@ def visualize_extrinsic_results_red_mask(
                 spine.set_linewidth(3)
 
         if masks is not None:
-            ax = fig.add_subplot(1, num_subplots, num_subplots)
+            ax = fig.add_subplot(nrows, ncols, len(extrinsics) + 1)
             # Show input masks (if provided) using requested mask_color
             reference_mask = apply_mask_overlay(
                 images[i],

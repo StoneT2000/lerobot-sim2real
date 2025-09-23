@@ -39,7 +39,7 @@ from easyhec.optim.nvdiffrast_renderer import NVDiffrastRenderer
 
 from lerobot_sim2real.config.real_robot import create_real_robot
 from lerobot_sim2real.utils.camera import scale_intrinsics
-from lerobot_sim2real.optim.streaming_optimize import optimize_streaming, optimize_final
+from lerobot_sim2real.optim.streaming_optimize import optimize_final
 
 from easyhec import ROBOT_DEFINITIONS_DIR
 
@@ -388,76 +388,6 @@ class WebMaskAnnotator:
                     else None
                 )
 
-                hist = optimize_streaming(
-                    initial_extrinsic_guess=init_extr_t,
-                    camera_intrinsic=intrinsic_t,
-                    masks=masks_t,
-                    link_poses_dataset=link_poses_t,
-                    meshes=self.optim_meshes,
-                    camera_width=self.images.shape[2],
-                    camera_height=self.images.shape[1],
-                    camera_mount_poses=mount_poses_t,
-                    iterations=self.optim_iterations,
-                    learning_rate=float(lr),
-                    early_stopping_steps=self.optim_early_stopping,
-                    verbose=True,
-                )
-
-                best_hist = hist["best_so_far_extrinsics"].detach().cpu().numpy()
-                losses = hist["losses"]
-                init_tx, init_ty, init_tz = self.optim_initial_extrinsic_guess[
-                    :3, 3
-                ].tolist()
-                init_text = f"**Initial translation**: tx={init_tx:.4f}, ty={init_ty:.4f}, tz={init_tz:.4f}"
-                if best_hist.shape[0] == 0:
-                    mask_prev = _render_mask_from_extrinsic(
-                        self.optim_initial_extrinsic_guess, i_img
-                    )
-                    rows = [
-                        [
-                            0,
-                            losses[0] if len(losses) else None,
-                            losses[0] if len(losses) else None,
-                            *self.optim_initial_extrinsic_guess[:3, 3].tolist(),
-                        ]
-                    ]
-                    yield (
-                        _overlay(self.images[i_img], mask_prev),
-                        "no improvement",
-                        0,
-                        init_text,
-                        rows,
-                    )
-                    return
-                rows = []
-                best_loss_so_far = float("inf")
-                for step_i, extr_np in enumerate(best_hist):
-                    # Overlay initial (blue edges) + best (red fill + edges)
-                    mask_init = _render_mask_from_extrinsic(
-                        self.optim_initial_extrinsic_guess, i_img
-                    )
-                    mask_best = _render_mask_from_extrinsic(extr_np, i_img)
-                    base = self.images[i_img].copy()
-                    # initial as blue edges
-                    edges = cv2.Canny((mask_init.astype(np.uint8) * 255), 50, 150)
-                    base[edges > 0] = (30, 144, 255)
-                    # best as red fill
-                    overlay_img = _overlay(
-                        base, mask_best, color=(255, 0, 0), alpha=0.5
-                    )
-                    loss_i = float(losses[step_i]) if step_i < len(losses) else None
-                    if loss_i is not None:
-                        best_loss_so_far = min(best_loss_so_far, loss_i)
-                    tx, ty, tz = extr_np[:3, 3].tolist()
-                    rows.append([step_i, loss_i, best_loss_so_far, tx, ty, tz])
-                    yield (
-                        overlay_img,
-                        f"step {step_i + 1}/{best_hist.shape[0]}",
-                        step_i,
-                        init_text,
-                        rows,
-                    )
-
             # Wiring
             idx.change(load_image, inputs=idx, outputs=image_view)
             image_view.select(on_select, inputs=[idx, label_radio], outputs=status)
@@ -785,6 +715,7 @@ def main(args: SO101WebArgs):
             masks = annotator.launch_and_wait()
             np.save(mask_path, masks)
 
+        # todo(jackvial): Don't use optimize_final, change it back to optimize
         predicted_camera_extrinsic_opencv = (
             optimize_final(
                 initial_extrinsic_guess=torch.tensor(initial_extrinsic_guess)
