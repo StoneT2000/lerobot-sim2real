@@ -507,7 +507,13 @@ def main(args: OpenCVPaperArgs) -> None:
     ph = PAPER_SIZES_M[args.paper_type]["height"]
     # Slightly thicker paper to avoid rasterization artifacts during visualization
     paper_box = trimesh.creation.box(extents=(pw, ph, 5e-3))
-    meshes = [paper_box]
+
+    # Load lerobot_sim2real/assets/robots/so101/meshes/base_so101_v2.stl
+    base_so101_v2 = trimesh.load(
+        "lerobot_sim2real/assets/robots/so101/meshes/base_so101_v2.stl"
+    )
+
+    meshes = [base_so101_v2]
 
     # World frame = paper pose, single link
     link_poses_dataset = np.eye(4, dtype=np.float32)[None, None, :, :]
@@ -527,7 +533,7 @@ def main(args: OpenCVPaperArgs) -> None:
         camera_width=camera_width,
         camera_height=camera_height,
         train_steps=args.train_steps,
-        early_stopping_steps=1000,
+        early_stopping_steps=5000,
         output_dir=out_dir,
         paper_type=args.paper_type,
         server_name=args.server_name,
