@@ -23,6 +23,9 @@ from transforms3d.euler import euler2mat
 
 from easyhec.examples.real.base import Args
 
+# from lerobot.cameras.realsense import RealSenseCamera
+from lerobot.cameras.realsense import RealSenseCameraConfig, RealSenseCamera
+
 # from easyhec.utils import visualization
 from easyhec.utils.camera_conversions import opencv2ros, ros2opencv
 from lerobot_sim2real.utils.camera import scale_intrinsics
@@ -108,23 +111,17 @@ def _k_from_fov(
     return np.array([[fx, 0.0, cx], [0.0, fy, cy], [0.0, 0.0, 1.0]], dtype=np.float32)
 
 
-def _load_or_build_intrinsics_for_size(
-    width: int, height: int, args: OpenCVPaperArgs
-) -> np.ndarray:
-    if args.opencv_intrinsics_path is not None:
-        K = np.load(args.opencv_intrinsics_path)
-        if K.shape != (3, 3):
-            raise ValueError("Loaded intrinsics must be 3x3 matrix")
-        return K.astype(np.float32)
-    K = _k_from_fov(width, height, args.hfov_deg, args.vfov_deg)
-    if K is not None:
-        return K
+def _load_or_build_intrinsics_for_size() -> np.ndarray:
+    # K = _k_from_fov(width, height, args.hfov_deg, args.vfov_deg)
+    # if K is not None:
+    #     return K
     # Fallback: approximate from a base K (640x480) scaled to actual resolution
-    K_base = np.array(
-        [[595.9, 0.0, 320.0], [0.0, 794.7, 240.0], [0.0, 0.0, 1.0]],
-        dtype=np.float32,
-    )
-    return scale_intrinsics(K_base, 640, 480, width, height)
+    # K_base = np.array(
+    #     [[595.9, 0.0, 320.0], [0.0, 794.7, 240.0], [0.0, 0.0, 1.0]],
+    #     dtype=np.float32,
+    # )
+    # return scale_intrinsics(K_base, 640, 480, width, height)
+    return get_intrinics("realsense")
 
 
 class PaperWebAnnotator:
@@ -424,16 +421,73 @@ def _capture_one_frame(args: OpenCVPaperArgs) -> np.ndarray:
     return frame_rgb
 
 
+def _capture_one_frame_realsense(args: OpenCVPaperArgs) -> np.ndarray:
+    """
+    Camera #2:
+    Name: Intel RealSense D435
+    Type: RealSense
+    Id: 831612073213
+    Firmware version: 5.10.13
+    Usb type descriptor: 3.2
+    Physical port: /sys/devices/pci0000:00/0000:00:14.0/usb2/2-2/2-2:1.0/video4linux/video4
+    Product id: 0B07
+    Product line: D400
+    Default stream profile:
+      Stream_type: Color
+      Format: rgb8
+      Width: 640
+      Height: 480
+      Fps: 30
+    """
+    camera = RealSenseCamera(
+        RealSenseCameraConfig("831612073213", fps=30, width=640, height=480)
+    )
+    camera.connect()
+    frame = camera.async_read()
+    camera.disconnect()
+    return frame
+
+
+def get_intrinics(camera_type: str) -> np.ndarray:
+    if camera_type == "realsense":
+        camera = RealSenseCamera(
+            RealSenseCameraConfig("831612073213", fps=30, width=640, height=480)
+        )
+        camera.connect()
+        streams = camera.rs_profile.get_streams()
+        assert len(streams) == 1, (
+            "Only one stream per camera is supported at the moment and it must be the color steam. Make sure to not enable any other streams."
+        )
+        color_stream = streams[0]
+        color_intrinsics = color_stream.as_video_stream_profile().get_intrinsics()
+        intrinsics = np.array(
+            [
+                [color_intrinsics.fx, 0, color_intrinsics.ppx],
+                [0, color_intrinsics.fy, color_intrinsics.ppy],
+                [0, 0, 1],
+            ]
+        )
+        camera.disconnect()
+        return intrinsics
+
+    else:
+        initial_extrinsic_guess = np.eye(4, dtype=np.float32)
+        initial_extrinsic_guess[:3, :3] = euler2mat(0.0, np.pi / 4.0, 0.0)
+        initial_extrinsic_guess[:3, 3] = np.array([-0.4, 0.1, 0.4], dtype=np.float32)
+        initial_extrinsic_guess = ros2opencv(initial_extrinsic_guess)
+        return initial_extrinsic_guess
+
+
 def main(args: OpenCVPaperArgs) -> None:
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
     # Capture one RGB image first to know actual resolution
-    print("Capturing one frame from OpenCV camera...")
-    image = _capture_one_frame(args)
+    print("Capturing one frame from camera...")
+    image = _capture_one_frame_realsense(args)
     camera_height, camera_width = image.shape[0], image.shape[1]
     # Build intrinsics for the actual resolution (file → FOV → scaled base K)
-    K = _load_or_build_intrinsics_for_size(camera_width, camera_height, args)
+    K = _load_or_build_intrinsics_for_size()
 
     print(f"Camera intrinsics (OpenCV):\n{repr(K)}")
 
