@@ -19,13 +19,13 @@ def create_real_robot(uid: str = "so100") -> Robot:
             id="so100_follower",
             use_degrees=True,
             cameras={
-                "base_camera": OpenCVCameraConfig(
-                    index_or_path=Path("/dev/video0"),
-                    height=720,
-                    width=1280,
-                    fps=30,
-                    warmup_s=2,
-                )
+                # "base_camera": OpenCVCameraConfig(
+                #     index_or_path=Path("/dev/video0"),
+                #     height=720,
+                #     width=1280,
+                #     fps=30,
+                #     warmup_s=2,
+                # )
                 # "base_camera": RealSenseCameraConfig(serial_number_or_name="146322070293", fps=30, width=1280, height=720)
             },
         )
@@ -37,12 +37,15 @@ def create_real_robot(uid: str = "so100") -> Robot:
             cameras={
                 # You will likely need to adjust this for your own camera setup
                 # run `python -m lerobot.find_cameras opencv` to find your available camera indices
-                "base_camera": OpenCVCameraConfig(
-                    index_or_path=Path("/dev/video0"),
-                    height=480,
-                    width=640,
-                    fps=30,
-                    warmup_s=2,
+                # "base_camera": OpenCVCameraConfig(
+                #     index_or_path=Path("/dev/video0"),
+                #     height=480,
+                #     width=640,
+                #     fps=30,
+                #     warmup_s=2,
+                # )
+                "base_camera": RealSenseCameraConfig(
+                    "831612073213", fps=30, width=640, height=480
                 )
             },
         )

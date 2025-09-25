@@ -522,6 +522,8 @@ def main(args: OpenCVPaperArgs) -> None:
     out_dir = Path(args.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     normalized_cfg = _normalize_sam2_cfg_name(args.model_cfg)
+
+    steps = 10000
     annotator = PaperWebAnnotator(
         image=image,
         model_cfg=normalized_cfg,
@@ -532,8 +534,8 @@ def main(args: OpenCVPaperArgs) -> None:
         meshes=meshes,
         camera_width=camera_width,
         camera_height=camera_height,
-        train_steps=args.train_steps,
-        early_stopping_steps=5000,
+        train_steps=steps,
+        early_stopping_steps=steps,
         output_dir=out_dir,
         paper_type=args.paper_type,
         server_name=args.server_name,
