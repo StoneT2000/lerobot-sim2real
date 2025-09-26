@@ -173,8 +173,19 @@ class WebMaskAnnotator:
                         [1, -1], value=1, label="Point Label (1=pos, -1=neg)"
                     )
                     status = gr.Textbox(label="Status", interactive=False)
+
+                    # Initial extrinsic guess position controls
+                    gr.Markdown("## Initial Extrinsic Guess Position")
+                    with gr.Row():
+                        pos_x = gr.Number(value=0.1, label="X Position", step=0.01)
+                        pos_y = gr.Number(value=0.6, label="Y Position", step=0.01)
+                        pos_z = gr.Number(value=0.5, label="Z Position", step=0.01)
+
                     btn_prev = gr.Button("Prev")
                     btn_next = gr.Button("Next")
+                    btn_render_initial_extrinsic_guess = gr.Button(
+                        "Render Initial Extrinsic Guess"
+                    )
                     btn_clear = gr.Button("Clear Points")
                     btn_generate = gr.Button("Generate Mask")
                     btn_accept = gr.Button("Accept Mask")
@@ -261,6 +272,65 @@ class WebMaskAnnotator:
             def finish_and_exit() -> str:
                 self.done_event.set()
                 return "Exiting and continuing calibration..."
+
+            def render_initial_extrinsic_guess_before_optimization(
+                i: float, x_pos: float, y_pos: float, z_pos: float
+            ) -> np.ndarray:
+                """Render the initial extrinsic guess on the current image."""
+                i = int(i)
+
+                if (
+                    self.optim_intrinsic is None
+                    or self.optim_link_poses_dataset is None
+                    or self.optim_initial_extrinsic_guess is None
+                    or self.optim_meshes is None
+                ):
+                    # Return original image if optimization context not available
+                    return self.images[i]
+
+                # Get current image
+                current_image = self.images[i : i + 1]  # Single image as batch
+                current_link_poses = self.optim_link_poses_dataset[
+                    i : i + 1
+                ]  # Single pose set
+
+                # Create a custom initial extrinsic with user-specified position
+                custom_extrinsic = self.optim_initial_extrinsic_guess.copy()
+                custom_extrinsic[:3, 3] = np.array([x_pos, y_pos, z_pos])
+
+                # Create a single extrinsic for visualization
+                extrinsics_vis = custom_extrinsic[None, ...]  # Add batch dimension
+
+                # Use the visualization function to render the meshes
+                try:
+                    # Create a temporary output directory for the visualization
+                    import tempfile
+
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        rendered_image = visualize_extrinsic_results_red_mask(
+                            images=current_image,
+                            link_poses_dataset=current_link_poses,
+                            meshes=self.optim_meshes,
+                            intrinsic=self.optim_intrinsic,
+                            extrinsics=extrinsics_vis,
+                            masks=None,  # No masks for initial guess visualization
+                            labels=["Initial Extrinsic Guess"],
+                            output_dir=temp_dir,  # Use temp directory
+                            return_rgb=True,  # Return RGB array
+                            mask_color=None,  # No mask overlay
+                            mask_colors=[(255, 0, 0)],  # Red color for initial guess
+                            invert_extrinsic=True,
+                        )
+
+                    # Return the rendered image
+                    if rendered_image is not None:
+                        return rendered_image
+                    else:
+                        return self.images[i]
+
+                except Exception as e:
+                    print(f"Error rendering initial extrinsic guess: {e}")
+                    return self.images[i]
 
             def run_optimization() -> str:
                 if (
@@ -378,6 +448,11 @@ class WebMaskAnnotator:
             # Wiring
             idx.change(load_image, inputs=idx, outputs=image_view)
             image_view.select(on_select, inputs=[idx, label_radio], outputs=status)
+            btn_render_initial_extrinsic_guess.click(
+                render_initial_extrinsic_guess_before_optimization,
+                inputs=[idx, pos_x, pos_y, pos_z],
+                outputs=image_view,
+            )
             btn_clear.click(clear_points, inputs=idx, outputs=[image_view, status])
             btn_prev.click(prev, inputs=idx, outputs=[idx, image_view, status])
             btn_next.click(next_, inputs=idx, outputs=[idx, image_view, status])
@@ -478,8 +553,13 @@ def main(args: SO101WebArgs):
     initial_extrinsic_guesses = dict()
     for k in cameras_ft.keys():
         initial_extrinsic_guess = np.eye(4)
+
+        # This should be a rough guess of your camera position and orientation relative to the robot base
         initial_extrinsic_guess[:3, :3] = euler2mat(0, np.pi / 4, -np.pi / 5)
         initial_extrinsic_guess[:3, 3] = np.array([-0.4, 0.1, 0.5])
+
+        # Directly on the base should wash out the camera with the mesh
+        # initial_extrinsic_guess[:3, 3] = np.array([0.0, 0.0, 0.0])
         initial_extrinsic_guess = ros2opencv(initial_extrinsic_guess)
         initial_extrinsic_guesses[k] = initial_extrinsic_guess
 
