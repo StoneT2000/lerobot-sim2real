@@ -101,8 +101,8 @@ class WebMaskAnnotator:
         meshes: Optional[List] = None,
         initial_extrinsic_guess: Optional[np.ndarray] = None,
         camera_mount_poses: Optional[np.ndarray] = None,
-        iterations: int = 5000,
-        early_stopping_steps: int = 200,
+        iterations: int = 10000,
+        early_stopping_steps: int = 10000,
         output_dir: Optional[Path] = None,
     ) -> None:
         self.images = images
@@ -177,9 +177,16 @@ class WebMaskAnnotator:
                     # Initial extrinsic guess position controls
                     gr.Markdown("## Initial Extrinsic Guess Position")
                     with gr.Row():
-                        pos_x = gr.Number(value=0.1, label="X Position", step=0.01)
-                        pos_y = gr.Number(value=0.6, label="Y Position", step=0.01)
-                        pos_z = gr.Number(value=0.5, label="Z Position", step=0.01)
+                        pos_x = gr.Number(value=0.08, label="X Position", step=0.01)
+                        pos_y = gr.Number(value=0, label="Y Position", step=0.01)
+                        pos_z = gr.Number(value=0.56, label="Z Position", step=0.01)
+
+                    # Initial extrinsic guess rotation controls
+                    gr.Markdown("## Initial Extrinsic Guess Rotation (degrees)")
+                    with gr.Row():
+                        rot_x = gr.Number(value=0.0, label="Roll (X)", step=0.01)
+                        rot_y = gr.Number(value=np.pi / 4, label="Pitch (Y)", step=0.01)
+                        rot_z = gr.Number(value=-np.pi / 5, label="Yaw (Z)", step=0.01)
 
                     btn_prev = gr.Button("Prev")
                     btn_next = gr.Button("Next")
@@ -274,7 +281,13 @@ class WebMaskAnnotator:
                 return "Exiting and continuing calibration..."
 
             def render_initial_extrinsic_guess_before_optimization(
-                i: float, x_pos: float, y_pos: float, z_pos: float
+                i: float,
+                x_pos: float,
+                y_pos: float,
+                z_pos: float,
+                rot_x_rad: float,
+                rot_y_rad: float,
+                rot_z_rad: float,
             ) -> np.ndarray:
                 """Render the initial extrinsic guess on the current image."""
                 i = int(i)
@@ -294,9 +307,20 @@ class WebMaskAnnotator:
                     i : i + 1
                 ]  # Single pose set
 
-                # Create a custom initial extrinsic with user-specified position
-                custom_extrinsic = self.optim_initial_extrinsic_guess.copy()
+                # Create a custom initial extrinsic with user-specified position and rotation
+                custom_extrinsic = np.eye(4)
+
+                # Convert degrees to radians and create rotation matrix
+                # rot_x_rad = np.deg2rad(rot_x_deg)
+
+                # rot_y_rad = np.deg2rad(rot_y_deg)
+                # rot_z_rad = np.deg2rad(rot_z_deg)
+                custom_extrinsic[:3, :3] = euler2mat(rot_x_rad, rot_y_rad, rot_z_rad)
+                # custom_extrinsic[:3, :3] = euler2mat(0, np.pi / 4, -np.pi / 5)
                 custom_extrinsic[:3, 3] = np.array([x_pos, y_pos, z_pos])
+
+                # Convert from ROS to OpenCV coordinate system
+                custom_extrinsic = ros2opencv(custom_extrinsic)
 
                 # Create a single extrinsic for visualization
                 extrinsics_vis = custom_extrinsic[None, ...]  # Add batch dimension
@@ -450,7 +474,7 @@ class WebMaskAnnotator:
             image_view.select(on_select, inputs=[idx, label_radio], outputs=status)
             btn_render_initial_extrinsic_guess.click(
                 render_initial_extrinsic_guess_before_optimization,
-                inputs=[idx, pos_x, pos_y, pos_z],
+                inputs=[idx, pos_x, pos_y, pos_z, rot_x, rot_y, rot_z],
                 outputs=image_view,
             )
             btn_clear.click(clear_points, inputs=idx, outputs=[image_view, status])
@@ -555,8 +579,8 @@ def main(args: SO101WebArgs):
         initial_extrinsic_guess = np.eye(4)
 
         # This should be a rough guess of your camera position and orientation relative to the robot base
-        initial_extrinsic_guess[:3, :3] = euler2mat(0, np.pi / 4, -np.pi / 5)
-        initial_extrinsic_guess[:3, 3] = np.array([-0.4, 0.1, 0.5])
+        initial_extrinsic_guess[:3, :3] = euler2mat(-0.5, 0.8, -1.0)
+        initial_extrinsic_guess[:3, 3] = np.array([0.08, 0.0, 0.93])
 
         # Directly on the base should wash out the camera with the mesh
         # initial_extrinsic_guess[:3, 3] = np.array([0.0, 0.0, 0.0])
