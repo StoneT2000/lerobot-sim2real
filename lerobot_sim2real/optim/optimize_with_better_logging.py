@@ -15,11 +15,11 @@ def optimize(
     camera_width: int,
     camera_height: int,
     camera_mount_poses: Optional[torch.Tensor] = None,
-    iterations: int = 5000,
+    iterations: int = 10000,
     learning_rate: float = 3e-3,
     gt_camera_pose: Optional[torch.Tensor] = None,
     batch_size: Optional[int] = None,
-    early_stopping_steps: int = 200,
+    early_stopping_steps: int = 10000,
     verbose: bool = True,
     return_history: bool = False,
 ):

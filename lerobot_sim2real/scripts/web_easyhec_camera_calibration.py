@@ -529,6 +529,12 @@ class SO101WebArgs(Args):
     use_previous_captures: bool = False
     env_kwargs_json_path: Optional[str] = None
 
+    # Training configuration - override base class defaults
+    train_steps: int = 10000
+    """number of optimization steps"""
+    early_stopping_steps: int = 10000
+    """if after this many steps of optimization the loss has not improved, then optimization will stop"""
+
     # Web UI options
     server_port: int = 7860
     server_name: str = "0.0.0.0"
