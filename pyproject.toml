@@ -20,6 +20,8 @@ dependencies = [
     "ninja>=1.13.0",
     "gradio>=5.46.1",
     "plotly>=6.3.0",
+    "numpy>=1.26.4",
+    "trimesh>=4.8.1",
 ]
 
 [project.urls]

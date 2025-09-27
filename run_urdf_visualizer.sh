@@ -47,6 +47,6 @@ echo "🚀 Launching URDF Visualizer on http://localhost:1337"
 echo "Press Ctrl+C to stop"
 
 cd "$(dirname "$0")" || exit 1
-python3 urdf_visualizer.py
+uv run python lerobot_sim2real/scripts/urdf_visualizer.py
 
 echo "👋 URDF Visualizer stopped"

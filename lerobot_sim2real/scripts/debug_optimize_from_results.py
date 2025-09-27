@@ -13,10 +13,10 @@ import numpy as np
 import torch
 import tyro
 from transforms3d.euler import euler2mat
-from urchin import URDF
-
 from easyhec.utils.camera_conversions import ros2opencv
-from easyhec.utils.utils_3d import merge_meshes
+
+# Import shared URDF utilities
+from lerobot_sim2real.utils.urdf_utils import load_robot_meshes_for_calibration
 
 from lerobot_sim2real.optim.streaming_optimize import optimize_streaming
 from lerobot_sim2real.utils.camera import scale_intrinsics  # noqa: F401 (kept for quick toggling)
@@ -78,35 +78,8 @@ class Args:
 
 
 def build_meshes_from_urdf(uid: str) -> List:
-    if uid == "so100":
-        from easyhec import ROBOT_DEFINITIONS_DIR
-
-        robot_def_path = Path(ROBOT_DEFINITIONS_DIR) / "so100" / "so100.urdf"
-    elif uid == "so101":
-        robot_def_path = (
-            Path(__file__).parent.parent / "assets" / "robots" / "so101" / "so101.urdf"
-        )
-    else:
-        raise ValueError(f"Unknown robot uid: {uid}. Supported: 'so100', 'so101'")
-
-    robot_urdf = URDF.load(str(robot_def_path))
-
-    meshes = []
-    for link in robot_urdf.links:
-        link_meshes = []
-        for visual in link.visuals:
-            geom = getattr(visual, "geometry", None)
-            mesh_attr = getattr(geom, "mesh", None)
-            if mesh_attr is None:
-                continue
-            link_meshes += mesh_attr.meshes
-        if not link_meshes:
-            continue
-        merged = merge_meshes(link_meshes)
-        if merged is None:
-            continue
-        if hasattr(merged, "vertices") and hasattr(merged, "faces"):
-            meshes.append(merged)
+    """Build meshes from URDF using shared utility function."""
+    _, meshes, _ = load_robot_meshes_for_calibration(uid)
     return meshes
 
 

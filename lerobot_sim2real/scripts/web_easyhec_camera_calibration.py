@@ -23,11 +23,11 @@ from lerobot.motors.motors_bus import MotorNormMode
 from lerobot.robots.so101_follower.so101_follower import SO101Follower
 from lerobot.robots.so100_follower.so100_follower import SO100Follower
 from transforms3d.euler import euler2mat
-from urchin import URDF
-
 from easyhec.examples.real.base import Args
 from easyhec.utils.camera_conversions import opencv2ros, ros2opencv
-from easyhec.utils.utils_3d import merge_meshes
+
+# Import shared URDF utilities
+from lerobot_sim2real.utils.urdf_utils import load_robot_meshes_for_calibration
 
 # Optional: red mask overlay visualization
 import sys
@@ -38,8 +38,6 @@ from custom_visualization import visualize_extrinsic_results_red_mask
 from lerobot_sim2real.config.real_robot import create_real_robot
 from lerobot_sim2real.utils.camera import scale_intrinsics
 from lerobot_sim2real.optim.optimize_with_better_logging import optimize
-
-from easyhec import ROBOT_DEFINITIONS_DIR
 
 
 def _k_from_fov(
@@ -676,36 +674,8 @@ def main(args: SO101WebArgs):
     # print(f"Robot definition path: {robot_def_path}")
     # robot_urdf = URDF.load(str(robot_def_path))
 
-    if uid == "so100":
-        robot_def_path = ROBOT_DEFINITIONS_DIR / "so100"
-        robot_urdf = URDF.load(str(robot_def_path / "so100.urdf"))
-    elif uid == "so101":
-        robot_def_path = (
-            Path(__file__).parent.parent / "assets" / "robots" / "so101" / "so101.urdf"
-        )
-        print(f"Robot definition path: {robot_def_path}")
-        robot_urdf = URDF.load(str(robot_def_path))
-    else:
-        raise ValueError(f"Unknown robot uid: {uid}. Supported: 'so100', 'so101'")
-
-    meshes = []
-    mesh_link_names = []
-    for link in robot_urdf.links:
-        link_meshes = []
-        for visual in link.visuals:
-            geom = getattr(visual, "geometry", None)
-            mesh_attr = getattr(geom, "mesh", None)
-            if mesh_attr is None:
-                continue
-            link_meshes += mesh_attr.meshes
-        if not link_meshes:
-            continue
-        merged = merge_meshes(link_meshes)
-        if merged is None:
-            continue
-        if hasattr(merged, "vertices") and hasattr(merged, "faces"):
-            meshes.append(merged)
-            mesh_link_names.append(link.name)
+    # Use shared utility function to load URDF and extract meshes for calibration
+    robot_urdf, meshes, mesh_link_names = load_robot_meshes_for_calibration(uid)
 
     # print(f"Meshes: {meshes}")
     print(f"Mesh link names: {mesh_link_names}")

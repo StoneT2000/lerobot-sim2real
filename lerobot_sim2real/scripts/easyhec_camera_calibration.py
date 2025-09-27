@@ -16,14 +16,13 @@ from lerobot.cameras.realsense import RealSenseCamera
 from lerobot.motors.motors_bus import MotorNormMode
 from lerobot.robots.so101_follower.so101_follower import SO101Follower
 from transforms3d.euler import euler2mat
-from urchin import URDF
-
 from easyhec.examples.real.base import Args
 from easyhec.optim.optimize import optimize
 from easyhec.segmentation.interactive import InteractiveSegmentation
-from easyhec.utils import visualization
 from easyhec.utils.camera_conversions import opencv2ros, ros2opencv
-from easyhec.utils.utils_3d import merge_meshes
+
+# Import shared URDF utilities
+from lerobot_sim2real.utils.urdf_utils import load_robot_meshes_for_calibration
 
 # Import our custom visualization function
 import sys
@@ -188,32 +187,8 @@ def main(args: SO101Args):
             )
         robot.send_action(action)
 
-    robot_def_path = (
-        Path(__file__).parent.parent / "assets" / "robots" / "so101" / "so101.urdf"
-    )
-    print(f"Robot definition path: {robot_def_path}")
-    robot_urdf = URDF.load(str(robot_def_path))
-
-    meshes = []
-    mesh_link_names = []
-    for link in robot_urdf.links:
-        link_meshes = []
-        for visual in link.visuals:
-            # Skip visuals without mesh geometry
-            geom = getattr(visual, "geometry", None)
-            mesh_attr = getattr(geom, "mesh", None)
-            if mesh_attr is None:
-                continue
-            link_meshes += mesh_attr.meshes
-        if not link_meshes:
-            continue
-        merged = merge_meshes(link_meshes)
-        # Keep only valid triangle meshes
-        if merged is None:
-            continue
-        if hasattr(merged, "vertices") and hasattr(merged, "faces"):
-            meshes.append(merged)
-            mesh_link_names.append(link.name)
+    # Use shared utility function to load URDF and extract meshes for calibration
+    robot_urdf, meshes, mesh_link_names = load_robot_meshes_for_calibration("so101")
 
     if (
         args.use_previous_captures
@@ -325,7 +300,7 @@ def main(args: SO101Args):
         camera_width = images.shape[2]
         camera_height = images.shape[1]
 
-        mask_path = Path(args.output_dir) / robot_id / k / f"mask.npy"
+        mask_path = Path(args.output_dir) / robot_id / k / "mask.npy"
         if args.use_previous_captures and mask_path.exists():
             print(f"Using previous mask from {mask_path}")
             masks = np.load(mask_path)
