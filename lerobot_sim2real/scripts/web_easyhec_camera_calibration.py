@@ -481,7 +481,7 @@ class WebMaskAnnotator:
                     sel = np.unique(np.round(np.linspace(0, m - 1, 50)).astype(int))
                 extrinsics_vis = best_extrinsics_np[sel]
                 labels = [
-                    f"Step {int(steps[k])} (loss={float(losses[k]):.2f})" for k in sel
+                    f"Step {int(steps[k])} (loss={float(losses[k]):.6f})" for k in sel
                 ]
                 extrinsics_vis = np.concatenate(
                     [self.optim_initial_extrinsic_guess[None, ...], extrinsics_vis],
