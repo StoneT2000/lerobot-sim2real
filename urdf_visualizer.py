@@ -185,19 +185,24 @@ class URDFVisualizer:
             print(f"Error creating 3D plot: {e}")
             return self.create_empty_plot()
 
-        # Update layout
+        # Update layout with proper aspect ratio
         fig.update_layout(
             scene=dict(
                 xaxis_title="X",
                 yaxis_title="Y",
                 zaxis_title="Z",
-                aspectmode="cube",
-                camera=dict(eye=dict(x=1.5, y=1.5, z=1.5)),
+                aspectmode="data",  # Use actual data proportions
+                aspectratio=dict(x=1, y=1, z=1),  # Force equal aspect ratios
+                camera=dict(
+                    eye=dict(x=1.2, y=1.2, z=1.2),
+                    center=dict(x=0, y=0, z=0.3),  # Look at center of robot workspace
+                    up=dict(x=0, y=0, z=1),  # Z-up coordinate system
+                ),
             ),
             title="URDF Robot Visualization",
             showlegend=True,
             width=800,
-            height=600,
+            height=800,  # Make it square to avoid stretching
         )
 
         return fig
@@ -255,10 +260,16 @@ class URDFVisualizer:
 
         fig = go.Figure()
         fig.update_layout(
-            scene=dict(xaxis_title="X", yaxis_title="Y", zaxis_title="Z"),
+            scene=dict(
+                xaxis_title="X",
+                yaxis_title="Y",
+                zaxis_title="Z",
+                aspectmode="data",
+                aspectratio=dict(x=1, y=1, z=1),
+            ),
             title="Load a URDF file to visualize",
             width=800,
-            height=600,
+            height=800,  # Square aspect ratio
         )
         return fig
 
@@ -320,6 +331,7 @@ def create_gradio_interface():
                 joint6_slider = gr.Slider(0, 1, 0.2, step=0.01, label="Gripper")
 
                 update_pose_btn = gr.Button("Update Robot Pose", variant="secondary")
+                reset_view_btn = gr.Button("Reset View", variant="secondary")
 
             with gr.Column(scale=2):
                 # 3D Visualization
@@ -372,6 +384,10 @@ def create_gradio_interface():
 
             return visualizer.update_joint_config(**joint_updates)
 
+        def reset_view_handler():
+            """Reset the 3D view to default camera position."""
+            return visualizer.create_3d_plot()
+
         # Event handlers
         path_dropdown.change(
             update_path_visibility,
@@ -395,6 +411,11 @@ def create_gradio_interface():
                 joint5_slider,
                 joint6_slider,
             ],
+            outputs=[plot_3d],
+        )
+
+        reset_view_btn.click(
+            reset_view_handler,
             outputs=[plot_3d],
         )
 
