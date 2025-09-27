@@ -450,7 +450,7 @@ class WebMaskAnnotator:
                     iterations=self.optim_iterations,
                     early_stopping_steps=self.optim_early_stopping,
                     return_history=True,
-                    learning_rate=0.01,
+                    learning_rate=0.003,
                     batch_size=None,
                 )
 
@@ -572,7 +572,7 @@ class SO101WebArgs(Args):
     # Training configuration - override base class defaults
     train_steps: int = 10000
     """number of optimization steps"""
-    early_stopping_steps: int = 10000
+    early_stopping_steps: int = 2000
     """if after this many steps of optimization the loss has not improved, then optimization will stop"""
 
     # Web UI options
