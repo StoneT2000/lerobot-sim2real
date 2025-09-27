@@ -755,8 +755,8 @@ def main(args: SO101WebArgs):
     else:
         qpos_samples = [
             np.array([0, 0, 0, np.pi / 2, np.pi / 2, 0.2]),
-            # np.array([np.pi / 3, -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
-            # np.array([-(np.pi / 3), -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
+            np.array([np.pi / 3, -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
+            np.array([-(np.pi / 3), -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
             # np.array([-np.pi / 4, -np.pi / 6, np.pi / 6, np.pi / 2, np.pi / 2, 0.1]),
             # np.array([0, 0, 0, 0, np.pi / 2, 0.2]),
             # np.array([0, np.pi / 6, 0, 0, np.pi / 2, 0.2]),
