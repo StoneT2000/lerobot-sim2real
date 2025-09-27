@@ -19,6 +19,7 @@ dependencies = [
     "nvdiffrast",
     "ninja>=1.13.0",
     "gradio>=5.46.1",
+    "plotly>=6.3.0",
 ]
 
 [project.urls]

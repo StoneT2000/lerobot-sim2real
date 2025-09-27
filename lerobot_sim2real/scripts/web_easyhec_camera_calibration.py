@@ -707,6 +707,9 @@ def main(args: SO101WebArgs):
             meshes.append(merged)
             mesh_link_names.append(link.name)
 
+    # print(f"Meshes: {meshes}")
+    print(f"Mesh link names: {mesh_link_names}")
+
     if (
         args.use_previous_captures
         and (Path(args.output_dir) / robot_id / "link_poses_dataset.npy").exists()
