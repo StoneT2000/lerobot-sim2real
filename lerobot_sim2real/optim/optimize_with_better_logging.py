@@ -76,6 +76,7 @@ def optimize(
         best_extrinsics = []
         best_extrinsics_steps = []
         best_extrinsics_losses = []
+        all_losses = []
     for i in pbar:
         if batch_size is None:
             batch = dataset
@@ -87,6 +88,8 @@ def optimize(
         output["mask_loss"].backward()
         optimizer.step()
         loss_value = output["mask_loss"].item()
+        if return_history:
+            all_losses.append(loss_value)
         if loss_value < best_loss:
             best_loss = loss_value
             best_predicted_extrinsic = solver.get_predicted_extrinsic()
@@ -108,6 +111,7 @@ def optimize(
             "best_extrinsics": torch.stack(best_extrinsics),
             "best_extrinsics_step": best_extrinsics_steps,
             "best_extrinsics_losses": best_extrinsics_losses,
+            "all_losses": all_losses,
         }
     else:
         return best_predicted_extrinsic

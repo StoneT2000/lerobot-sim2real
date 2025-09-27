@@ -172,19 +172,23 @@ class WebMaskAnnotator:
                     )
                     status = gr.Textbox(label="Status", interactive=False)
 
+                    # initial_extrinsic_guess[:3, :3] = euler2mat(0.26, 0.11, 0.86)
+                    # initial_extrinsic_guess[:3, 3] = np.array([0.0, 0.67, -1.66])
+
                     # Initial extrinsic guess position controls
                     gr.Markdown("## Initial Extrinsic Guess Position")
                     with gr.Row():
-                        pos_x = gr.Number(value=0.08, label="X Position", step=0.01)
-                        pos_y = gr.Number(value=0, label="Y Position", step=0.01)
-                        pos_z = gr.Number(value=0.56, label="Z Position", step=0.01)
+                        # Default should match the initial extrinsic guess position
+                        pos_x = gr.Number(value=0.26, label="X Position", step=0.01)
+                        pos_y = gr.Number(value=0.11, label="Y Position", step=0.01)
+                        pos_z = gr.Number(value=0.86, label="Z Position", step=0.01)
 
                     # Initial extrinsic guess rotation controls
                     gr.Markdown("## Initial Extrinsic Guess Rotation (degrees)")
                     with gr.Row():
                         rot_x = gr.Number(value=0.0, label="Roll (X)", step=0.01)
-                        rot_y = gr.Number(value=np.pi / 4, label="Pitch (Y)", step=0.01)
-                        rot_z = gr.Number(value=-np.pi / 5, label="Yaw (Z)", step=0.01)
+                        rot_y = gr.Number(value=0.67, label="Pitch (Y)", step=0.01)
+                        rot_z = gr.Number(value=-1.66, label="Yaw (Z)", step=0.01)
 
                     btn_prev = gr.Button("Prev")
                     btn_next = gr.Button("Next")
@@ -410,6 +414,8 @@ class WebMaskAnnotator:
                     iterations=self.optim_iterations,
                     early_stopping_steps=self.optim_early_stopping,
                     return_history=True,
+                    learning_rate=1e-3,
+                    batch_size=1,
                 )
 
                 # Use the last best extrinsic
@@ -583,8 +589,8 @@ def main(args: SO101WebArgs):
         initial_extrinsic_guess = np.eye(4)
 
         # This should be a rough guess of your camera position and orientation relative to the robot base
-        initial_extrinsic_guess[:3, :3] = euler2mat(-0.5, 0.8, -1.0)
-        initial_extrinsic_guess[:3, 3] = np.array([0.08, 0.0, 0.93])
+        initial_extrinsic_guess[:3, :3] = euler2mat(0.26, 0.11, 0.86)
+        initial_extrinsic_guess[:3, 3] = np.array([0.0, 0.67, -1.66])
 
         # Directly on the base should wash out the camera with the mesh
         # initial_extrinsic_guess[:3, 3] = np.array([0.0, 0.0, 0.0])
