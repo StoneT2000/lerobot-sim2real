@@ -450,8 +450,8 @@ class WebMaskAnnotator:
                     iterations=self.optim_iterations,
                     early_stopping_steps=self.optim_early_stopping,
                     return_history=True,
-                    learning_rate=1e-4,
-                    batch_size=1,
+                    learning_rate=0.01,
+                    batch_size=None,
                 )
 
                 # Use the last best extrinsic
@@ -620,12 +620,12 @@ def main(args: SO101WebArgs):
         (Path(args.output_dir) / robot_id / k).mkdir(parents=True, exist_ok=True)
 
     initial_extrinsic_x = 0.25
-    initial_extrinsic_y = 0.15
-    initial_extrinsic_z = 0.72
+    initial_extrinsic_y = 0.16
+    initial_extrinsic_z = 0.79
 
-    initial_extrinsic_x_rotation = 0.0
+    initial_extrinsic_x_rotation = 0.22
     initial_extrinsic_y_rotation = 0.0
-    initial_extrinsic_z_rotation = -1.66
+    initial_extrinsic_z_rotation = -1.57
 
     # Initial extrinsic guesses
     initial_extrinsic_guesses = dict()
@@ -755,8 +755,8 @@ def main(args: SO101WebArgs):
     else:
         qpos_samples = [
             np.array([0, 0, 0, np.pi / 2, np.pi / 2, 0.2]),
-            np.array([np.pi / 3, -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
-            np.array([-(np.pi / 3), -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
+            # np.array([np.pi / 3, -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
+            # np.array([-(np.pi / 3), -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
             # np.array([-np.pi / 4, -np.pi / 6, np.pi / 6, np.pi / 2, np.pi / 2, 0.1]),
             # np.array([0, 0, 0, 0, np.pi / 2, 0.2]),
             # np.array([0, np.pi / 6, 0, 0, np.pi / 2, 0.2]),
