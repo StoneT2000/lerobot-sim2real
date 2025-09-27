@@ -919,7 +919,7 @@ def main(args: SO101WebArgs):
         else:
             sel = np.unique(np.round(np.linspace(0, m - 1, 50)).astype(int))
         extrinsics_vis = best_extrinsics_np[sel]
-        labels = [f"Step {int(steps[t])} (loss={float(losses[t]):.2f})" for t in sel]
+        labels = [f"Step {int(steps[t])} (loss={float(losses[t]):.6f})" for t in sel]
         extrinsics_vis = np.concatenate(
             [initial_extrinsic_guess[None, ...], extrinsics_vis], axis=0
         )
