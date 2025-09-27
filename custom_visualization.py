@@ -180,6 +180,7 @@ def visualize_extrinsic_results_red_mask(
             ax.set_title("Masks")
 
         Path(output_dir).mkdir(parents=True, exist_ok=True)
+
         plt.tight_layout()
         fig.savefig(f"{output_dir}/{i}.png")
         plt.close()

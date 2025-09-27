@@ -102,6 +102,12 @@ class WebMaskAnnotator:
         iterations: int = 10000,
         early_stopping_steps: int = 10000,
         output_dir: Optional[Path] = None,
+        initial_extrinsic_x: float = 0.0,
+        initial_extrinsic_y: float = 0.0,
+        initial_extrinsic_z: float = 0.0,
+        initial_extrinsic_x_rotation: float = 0.0,
+        initial_extrinsic_y_rotation: float = 0.0,
+        initial_extrinsic_z_rotation: float = 0.0,
     ) -> None:
         self.images = images
         self.num_images = len(images)
@@ -119,6 +125,12 @@ class WebMaskAnnotator:
         self.optim_early_stopping = early_stopping_steps
         self.output_dir = output_dir
         self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.initial_extrinsic_x = initial_extrinsic_x
+        self.initial_extrinsic_y = initial_extrinsic_y
+        self.initial_extrinsic_z = initial_extrinsic_z
+        self.initial_extrinsic_x_rotation = initial_extrinsic_x_rotation
+        self.initial_extrinsic_y_rotation = initial_extrinsic_y_rotation
+        self.initial_extrinsic_z_rotation = initial_extrinsic_z_rotation
 
         # Build predictor once (headless-friendly)
         from sam2.build_sam import build_sam2
@@ -176,19 +188,43 @@ class WebMaskAnnotator:
                     # initial_extrinsic_guess[:3, 3] = np.array([0.0, 0.67, -1.66])
 
                     # Initial extrinsic guess position controls
-                    gr.Markdown("## Initial Extrinsic Guess Position")
+                    gr.Markdown("## Initial Extrinsic Guess Position (ROS coordinates)")
                     with gr.Row():
-                        # Default should match the initial extrinsic guess position
-                        pos_x = gr.Number(value=0.26, label="X Position", step=0.01)
-                        pos_y = gr.Number(value=0.11, label="Y Position", step=0.01)
-                        pos_z = gr.Number(value=0.86, label="Z Position", step=0.01)
+                        # More realistic defaults for overhead camera
+                        pos_x = gr.Number(
+                            value=self.initial_extrinsic_x,
+                            label="X Position (forward)",
+                            step=0.01,
+                        )
+                        pos_y = gr.Number(
+                            value=self.initial_extrinsic_y,
+                            label="Y Position (left)",
+                            step=0.01,
+                        )
+                        pos_z = gr.Number(
+                            value=self.initial_extrinsic_z,
+                            label="Z Position (up)",
+                            step=0.01,
+                        )
 
                     # Initial extrinsic guess rotation controls
-                    gr.Markdown("## Initial Extrinsic Guess Rotation (degrees)")
+                    gr.Markdown("## Initial Extrinsic Guess Rotation (radians)")
                     with gr.Row():
-                        rot_x = gr.Number(value=0.0, label="Roll (X)", step=0.01)
-                        rot_y = gr.Number(value=0.67, label="Pitch (Y)", step=0.01)
-                        rot_z = gr.Number(value=-1.66, label="Yaw (Z)", step=0.01)
+                        rot_x = gr.Number(
+                            value=self.initial_extrinsic_x_rotation,
+                            label="Roll (X)",
+                            step=0.01,
+                        )  # -30 degrees
+                        rot_y = gr.Number(
+                            value=self.initial_extrinsic_y_rotation,
+                            label="Pitch (Y)",
+                            step=0.01,
+                        )
+                        rot_z = gr.Number(
+                            value=self.initial_extrinsic_z_rotation,
+                            label="Yaw (Z)",
+                            step=0.01,
+                        )
 
                     btn_prev = gr.Button("Prev")
                     btn_next = gr.Button("Next")
@@ -534,9 +570,9 @@ class SO101WebArgs(Args):
     env_kwargs_json_path: Optional[str] = None
 
     # Training configuration - override base class defaults
-    train_steps: int = 10000
+    train_steps: int = 1000
     """number of optimization steps"""
-    early_stopping_steps: int = 10000
+    early_stopping_steps: int = 200
     """if after this many steps of optimization the loss has not improved, then optimization will stop"""
 
     # Web UI options
@@ -583,14 +619,34 @@ def main(args: SO101WebArgs):
     for k in cameras_ft.keys():
         (Path(args.output_dir) / robot_id / k).mkdir(parents=True, exist_ok=True)
 
+    initial_extrinsic_x = 0.25
+    initial_extrinsic_y = 0.15
+    initial_extrinsic_z = 0.72
+
+    initial_extrinsic_x_rotation = 0.0
+    initial_extrinsic_y_rotation = 0.0
+    initial_extrinsic_z_rotation = -1.66
+
     # Initial extrinsic guesses
     initial_extrinsic_guesses = dict()
     for k in cameras_ft.keys():
         initial_extrinsic_guess = np.eye(4)
 
         # This should be a rough guess of your camera position and orientation relative to the robot base
-        initial_extrinsic_guess[:3, :3] = euler2mat(0.26, 0.11, 0.86)
-        initial_extrinsic_guess[:3, 3] = np.array([0.0, 0.67, -1.66])
+        # Position camera above and slightly forward of robot, angled downward
+        # ROS coordinates: X=forward, Y=left, Z=up
+        initial_extrinsic_guess[:3, :3] = euler2mat(
+            initial_extrinsic_x_rotation,
+            initial_extrinsic_y_rotation,
+            initial_extrinsic_z_rotation,
+        )  # Rotation matrix from Euler angles
+        initial_extrinsic_guess[:3, 3] = np.array(
+            [
+                initial_extrinsic_x,
+                initial_extrinsic_y,
+                initial_extrinsic_z,
+            ]
+        )  # Position coordinates
 
         # Directly on the base should wash out the camera with the mesh
         # initial_extrinsic_guess[:3, 3] = np.array([0.0, 0.0, 0.0])
@@ -770,6 +826,19 @@ def main(args: SO101WebArgs):
             masks = np.load(mask_path)
         else:
             print("Launching Gradio web UI for interactive mask creation...")
+
+            # Extract position and rotation from the initial guess for UI defaults
+            # Convert back from OpenCV to ROS to get the original values
+            from easyhec.utils.camera_conversions import opencv2ros
+            from scipy.spatial.transform import Rotation as R
+
+            initial_guess_ros = opencv2ros(initial_extrinsic_guess)
+            initial_pos = initial_guess_ros[:3, 3]
+            print(f"Initial position: {initial_pos}")
+            initial_rot_matrix = initial_guess_ros[:3, :3]
+            initial_rot_euler = R.from_matrix(initial_rot_matrix).as_euler("xyz")
+            print(f"Initial rotation: {initial_rot_euler}")
+
             annotator = WebMaskAnnotator(
                 images=images,
                 model_cfg=args.model_cfg,
@@ -785,6 +854,12 @@ def main(args: SO101WebArgs):
                 iterations=args.train_steps,
                 early_stopping_steps=args.early_stopping_steps,
                 output_dir=Path(args.output_dir) / robot_id / k,
+                initial_extrinsic_x=float(initial_pos[0]),
+                initial_extrinsic_y=float(initial_pos[1]),
+                initial_extrinsic_z=float(initial_pos[2]),
+                initial_extrinsic_x_rotation=float(initial_rot_euler[0]),
+                initial_extrinsic_y_rotation=float(initial_rot_euler[1]),
+                initial_extrinsic_z_rotation=float(initial_rot_euler[2]),
             )
             masks = annotator.launch_and_wait()
             np.save(mask_path, masks)
@@ -800,8 +875,6 @@ def main(args: SO101WebArgs):
             meshes=meshes,
             camera_width=camera_width,
             camera_height=camera_height,
-            camera_mount_poses=None,
-            gt_camera_pose=None,
             iterations=args.train_steps,
             early_stopping_steps=args.early_stopping_steps,
             return_history=True,

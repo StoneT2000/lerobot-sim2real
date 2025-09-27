@@ -16,7 +16,7 @@ def optimize(
     camera_height: int,
     camera_mount_poses: Optional[torch.Tensor] = None,
     iterations: int = 10000,
-    learning_rate: float = 3e-3,
+    learning_rate: float = 3e-4,
     gt_camera_pose: Optional[torch.Tensor] = None,
     batch_size: Optional[int] = None,
     early_stopping_steps: int = 10000,
@@ -76,20 +76,33 @@ def optimize(
         best_extrinsics = []
         best_extrinsics_steps = []
         best_extrinsics_losses = []
-        all_losses = []
+        # all_losses = []
     for i in pbar:
         if batch_size is None:
             batch = dataset
         else:
             bid = torch.randperm(len(dataset["mask"]))[:batch_size]
-            batch = {k: v[bid] for k, v in dataset.items()}
+            for k, v in dataset.items():
+                print(k, v.shape if v is not None else "None")
+            # Only batch tensors that have a sample dimension (first dim == N)
+            # intrinsic and mount_poses should not be batched
+            batch = {}
+            for k, v in dataset.items():
+                if v is None:
+                    batch[k] = None
+                elif k in ["intrinsic"]:
+                    # These should not be batched - same for all samples
+                    batch[k] = v
+                else:
+                    # These should be batched - different per sample
+                    batch[k] = v[bid]
         output = solver(batch)
         optimizer.zero_grad()
         output["mask_loss"].backward()
         optimizer.step()
         loss_value = output["mask_loss"].item()
-        if return_history:
-            all_losses.append(loss_value)
+        # if return_history:
+        #     all_losses.append(loss_value)
         if loss_value < best_loss:
             best_loss = loss_value
             best_predicted_extrinsic = solver.get_predicted_extrinsic()
@@ -111,7 +124,7 @@ def optimize(
             "best_extrinsics": torch.stack(best_extrinsics),
             "best_extrinsics_step": best_extrinsics_steps,
             "best_extrinsics_losses": best_extrinsics_losses,
-            "all_losses": all_losses,
+            # "all_losses": all_losses,
         }
     else:
         return best_predicted_extrinsic
