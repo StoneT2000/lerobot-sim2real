@@ -450,7 +450,7 @@ class WebMaskAnnotator:
                     iterations=self.optim_iterations,
                     early_stopping_steps=self.optim_early_stopping,
                     return_history=True,
-                    learning_rate=1e-3,
+                    learning_rate=1e-4,
                     batch_size=1,
                 )
 
@@ -570,9 +570,9 @@ class SO101WebArgs(Args):
     env_kwargs_json_path: Optional[str] = None
 
     # Training configuration - override base class defaults
-    train_steps: int = 1000
+    train_steps: int = 10000
     """number of optimization steps"""
-    early_stopping_steps: int = 200
+    early_stopping_steps: int = 10000
     """if after this many steps of optimization the loss has not improved, then optimization will stop"""
 
     # Web UI options
@@ -756,6 +756,7 @@ def main(args: SO101WebArgs):
         qpos_samples = [
             np.array([0, 0, 0, np.pi / 2, np.pi / 2, 0.2]),
             np.array([np.pi / 3, -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
+            np.array([-(np.pi / 3), -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
             # np.array([-np.pi / 4, -np.pi / 6, np.pi / 6, np.pi / 2, np.pi / 2, 0.1]),
             # np.array([0, 0, 0, 0, np.pi / 2, 0.2]),
             # np.array([0, np.pi / 6, 0, 0, np.pi / 2, 0.2]),
