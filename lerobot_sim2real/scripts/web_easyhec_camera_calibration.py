@@ -599,11 +599,13 @@ def main(args: SO101WebArgs):
         with open(args.env_kwargs_json_path, "r") as f:
             data = json.load(f)
             CALIBRATION_OFFSET = data.pop("calibration_offset")
-            uid = data.pop("uid")
 
     user_tuned_calibration_offset = any(
         CALIBRATION_OFFSET[k] != 0 for k in CALIBRATION_OFFSET.keys()
     )
+
+    print(f"user_tuned_calibration_offset: {user_tuned_calibration_offset}")
+    print(f"CALIBRATION_OFFSET: {CALIBRATION_OFFSET}")
     if not user_tuned_calibration_offset:
         logging.warning(
             "The calibration offset for sim2real/real2sim is not tuned!! Unless you are absolutely sure you will most likely get poor results."

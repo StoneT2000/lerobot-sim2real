@@ -1,5 +1,4 @@
 {
-    "uid": "so101",
     "base_camera_settings": {
         "extrinsics": "results/so101/so101_follower/base_camera/camera_extrinsic_ros.npy",
         "intrinsics": "results/so101/so101_follower/base_camera/camera_intrinsic_128x128.npy",
@@ -25,11 +24,11 @@
         "robot_color": null
     },
     "calibration_offset": {
-        "shoulder_pan": 14,
+        "shoulder_pan": 10,
         "shoulder_lift": 10,
         "elbow_flex": -5,
         "wrist_flex": 0,
         "wrist_roll": -7,
-        "gripper": 0
+        "gripper": 32.0
     }
 }
