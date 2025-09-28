@@ -30,6 +30,7 @@ def visualize_extrinsic_results_red_mask(
     edge_thickness: int = 2,
     invert_extrinsic: bool = False,
     swap_multiplication_order: bool = False,
+    create_compact_version: bool = False,
 ):
     """
     Visualizes a given list of extrinsic matrices and draws the mask cameras at those extrinsics would project on the original RGB images.
@@ -46,6 +47,7 @@ def visualize_extrinsic_results_red_mask(
         labels (List[str]): List of labels for each of the extrinsics
         output_dir (str): Directory to save the visualizations
         mask_color (tuple): RGB color for mask overlay (default: red)
+        create_compact_version (bool): If True, creates an additional 2x2 grid image with initial guess, first best, last best, and target mask
     """
     ### visualization code for the predicted extrinsic ###
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -184,5 +186,76 @@ def visualize_extrinsic_results_red_mask(
         plt.tight_layout()
         fig.savefig(f"{output_dir}/{i}.png")
         plt.close()
+
+        # Create compact version with 2x2 grid: initial guess, first best, last best, target mask
+        if create_compact_version:
+            plt.rcParams.update({"font.size": 16})
+            fig_compact = plt.figure(figsize=(13, 13))  # 2x2 grid, 6.5 per subplot
+
+            # Determine which extrinsics to show
+            initial_idx = 0  # Initial guess
+            first_best_idx = 1 if len(extrinsics) > 1 else 0  # First best prediction
+            last_best_idx = len(extrinsics) - 1  # Last best prediction
+
+            compact_indices = [initial_idx, first_best_idx, last_best_idx]
+            # Use the same titles as the original labels with step numbers and losses
+            compact_titles = []
+            for idx in compact_indices:
+                if idx < len(labels):
+                    compact_titles.append(labels[idx])
+                else:
+                    compact_titles.append(f"Extrinsic {idx}")
+            compact_colors = [color_list[idx] for idx in compact_indices]
+
+            # Create overlaid images for compact version
+            compact_overlaid_images = []
+            for idx in compact_indices:
+                if camera_mount_poses is not None:
+                    composed_extr = extrinsics[idx] @ camera_mount_poses[i]
+                    mask = get_mask_from_camera_pose(composed_extr)
+                else:
+                    mask = get_mask_from_camera_pose(extrinsics[idx])
+                mask = mask.cpu().numpy()
+                compact_overlaid_images.append(
+                    apply_mask_overlay(
+                        images[i],
+                        mask,
+                        color=color_list[idx],
+                        alpha=fill_alpha,
+                        draw_edges=overlay_edges,
+                        edge_px=edge_thickness,
+                    )
+                )
+
+            # Plot the 4 images in 2x2 grid
+            for j in range(3):  # First 3: initial, first best, last best
+                ax = fig_compact.add_subplot(2, 2, j + 1)
+                ax.imshow(compact_overlaid_images[j])
+                ax.axis("off")
+                ax.set_title(compact_titles[j])
+                # Color the subplot border
+                for spine in ax.spines.values():
+                    spine.set_edgecolor(np.array(compact_colors[j]) / 255.0)
+                    spine.set_linewidth(3)
+
+            # Add target mask in bottom right
+            if masks is not None:
+                ax = fig_compact.add_subplot(2, 2, 4)
+                reference_mask = apply_mask_overlay(
+                    images[i],
+                    masks[i],
+                    color=mask_color,
+                    alpha=0.4,
+                    draw_edges=True,
+                    edge_px=2,
+                )
+                ax.imshow(reference_mask)
+                ax.axis("off")
+                ax.set_title("Target Mask")
+
+            plt.tight_layout()
+            fig_compact.savefig(f"{output_dir}/{i}_compact.png")
+            plt.close()
+
         if return_rgb:
             return cv2.cvtColor(cv2.imread(f"{output_dir}/{i}.png"), cv2.COLOR_BGR2RGB)

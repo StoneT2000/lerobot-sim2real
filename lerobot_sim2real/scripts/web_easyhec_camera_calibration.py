@@ -505,6 +505,7 @@ class WebMaskAnnotator:
                     mask_color=(255, 0, 0),
                     mask_colors=per_extrinsic_colors,
                     invert_extrinsic=True,
+                    create_compact_version=True,
                 )
 
                 return f"Optimization complete. Saved results to {out_dir}"
@@ -943,6 +944,7 @@ def main(args: SO101WebArgs):
             mask_color=(255, 0, 0),
             mask_colors=per_extrinsic_colors,
             invert_extrinsic=True,
+            create_compact_version=True,
         )
         print(f"Visualizations saved to {Path(args.output_dir) / robot_id / k}")
 
