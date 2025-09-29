@@ -327,6 +327,7 @@ def create_gradio_interface():
 
     # Predefined URDF paths for convenience
     default_paths = {
+        "SO101 V2 Robot": str(get_robot_urdf_path("so101_v2")),
         "SO101 Robot": str(get_robot_urdf_path("so101")),
         "SO100 Robot": str(get_robot_urdf_path("so100")),
         "Custom Path": "",
@@ -342,7 +343,7 @@ def create_gradio_interface():
                 gr.Markdown("## 📁 Load URDF")
                 path_dropdown = gr.Dropdown(
                     choices=list(default_paths.keys()),
-                    value="SO101 Robot",
+                    value="SO101 V2 Robot",
                     label="Predefined Robots",
                 )
                 custom_path = gr.Textbox(

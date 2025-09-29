@@ -32,6 +32,14 @@ def get_robot_urdf_path(uid: str) -> Path:
         return (
             Path(__file__).parent.parent / "assets" / "robots" / "so101" / "so101.urdf"
         )
+    elif uid == "so101_v2":
+        return (
+            Path(__file__).parent.parent
+            / "assets"
+            / "robots"
+            / "so101"
+            / "so101_v2.urdf"
+        )
     else:
         raise ValueError(f"Unknown robot uid: {uid}. Supported: 'so100', 'so101'")
 

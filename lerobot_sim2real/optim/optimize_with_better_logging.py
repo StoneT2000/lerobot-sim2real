@@ -281,7 +281,8 @@ def optimize(
             )
             pbar.set_description(
                 f"Loss: {loss_value:.6f}, Best: {best_loss:.6f}, Worst: {worst_loss:.6f}, "
-                f"Avg: {average_loss:.2f}, Std: {loss_std:.4f}, Grad: {grad_str}"
+                f"Avg: {average_loss:.2f}, Std: {loss_std:.4f}, Grad: {grad_str}",
+                f"Step: {i}/{iterations}",
             )
         if "metrics" in output:
             pbar.set_postfix(output["metrics"])

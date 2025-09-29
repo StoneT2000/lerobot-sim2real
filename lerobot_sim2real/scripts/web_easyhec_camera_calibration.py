@@ -595,6 +595,7 @@ def main(args: SO101WebArgs):
     }
 
     uid = "so101"
+    urdf_name = "so101_v2"
 
     if args.env_kwargs_json_path is not None:
         with open(args.env_kwargs_json_path, "r") as f:
@@ -719,15 +720,28 @@ def main(args: SO101WebArgs):
             obs[k] = np.deg2rad(obs[k])
         if not flat:
             return obs
-        joint_positions = []
-        for k, v in obs.items():
-            joint_positions.append(v)
-        joint_positions = np.array(joint_positions)
-        return joint_positions
+        # joint_positions = []
+        # for k, v in obs.items():
+        #     joint_positions.append(v)
+        # joint_positions = np.array(joint_positions)
+        # return joint_positions
+
+        # Return joints in the explicit control order used by set_target_qpos
+        ordered_positions = []
+        for name in joint_position_names:
+            base = name.removesuffix(".pos")
+            if base in obs:
+                ordered_positions.append(obs[base])
+            else:
+                ordered_positions.append(0.0)
+        return np.array(ordered_positions)
 
     def set_target_qpos(robot: SO101Follower | SO100Follower, qpos: np.ndarray):
         action = {}
         for name, qpos_val in zip(joint_position_names, qpos):
+            print(
+                f"Setting {name} to {qpos_val} + {CALIBRATION_OFFSET[name.removesuffix('.pos')]}"
+            )
             action[name] = (
                 np.rad2deg(qpos_val) + CALIBRATION_OFFSET[name.removesuffix(".pos")]
             )
@@ -740,7 +754,7 @@ def main(args: SO101WebArgs):
     # robot_urdf = URDF.load(str(robot_def_path))
 
     # Use shared utility function to load URDF and extract meshes for calibration
-    robot_urdf, meshes, mesh_link_names = load_robot_meshes_for_calibration(uid)
+    robot_urdf, meshes, mesh_link_names = load_robot_meshes_for_calibration(urdf_name)
 
     # print(f"Meshes: {meshes}")
     print(f"Mesh link names: {mesh_link_names}")
@@ -757,9 +771,9 @@ def main(args: SO101WebArgs):
         ).reshape(-1)[0]
     else:
         qpos_samples = [
-            np.array([0, 0, 0, np.pi / 2, np.pi / 2, -1.0]),
-            np.array([np.pi / 3, -np.pi / 6, 0, np.pi / 2, np.pi / 2, -1.0]),
-            np.array([-(np.pi / 3), -np.pi / 6, 0, np.pi / 2, np.pi / 2, -1.0]),
+            np.array([0, 0, 0, np.pi / 2, np.pi / 2, 0]),
+            np.array([np.pi / 3, -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
+            np.array([-(np.pi / 3), -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
             # np.array([-np.pi / 4, -np.pi / 6, np.pi / 6, np.pi / 2, np.pi / 2, 0.1]),
             # np.array([0, 0, 0, 0, np.pi / 2, 0.2]),
             # np.array([0, np.pi / 6, 0, 0, np.pi / 2, 0.2]),

@@ -14,6 +14,7 @@
     <disable_collisions link1="upper_arm_link" link2="wrist_link" reason="Default"/>
     <disable_collisions link1="upper_arm_link" link2="base_link" reason="Default"/>
     <disable_collisions link1="gripper_link" link2="wrist_link" reason="Default"/>
+    <disable_collisions link1="wrist_link" link2="moving_jaw_so101_v1_link" reason="Default"/>
 </robot>
 
  

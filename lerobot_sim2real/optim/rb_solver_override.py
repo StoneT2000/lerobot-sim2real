@@ -89,18 +89,17 @@ class RBSolver(nn.Module):
         assert masks_ref.shape[1:] == (self.H, self.W)
 
         batch_size = masks_ref.shape[0]
-        # Unconditional debug
-        try:
-            t_c2b = Tc_c2b[:3, 3].detach().cpu().numpy()
-            t_w2c = Tw_w2c[:3, 3].detach().cpu().numpy()
-            print(
-                f"[RBSolver] forward: batch={batch_size}, "
-                f"t_c2b=[{float(t_c2b[0]):.4f} {float(t_c2b[1]):.4f} {float(t_c2b[2]):.4f}], "
-                f"t_w2c=[{float(t_w2c[0]):.4f} {float(t_w2c[1]):.4f} {float(t_w2c[2]):.4f}], "
-                f"dof_trans=[{float(self.dof[0].item()):.4f} {float(self.dof[1].item()):.4f} {float(self.dof[2].item()):.4f}]"
-            )
-        except Exception:
-            print(f"[RBSolver] forward: batch={batch_size}")
+        # try:
+        #     t_c2b = Tc_c2b[:3, 3].detach().cpu().numpy()
+        #     t_w2c = Tw_w2c[:3, 3].detach().cpu().numpy()
+        #     print(
+        #         f"[RBSolver] forward: batch={batch_size}, "
+        #         f"t_c2b=[{float(t_c2b[0]):.4f} {float(t_c2b[1]):.4f} {float(t_c2b[2]):.4f}], "
+        #         f"t_w2c=[{float(t_w2c[0]):.4f} {float(t_w2c[1]):.4f} {float(t_w2c[2]):.4f}], "
+        #         f"dof_trans=[{float(self.dof[0].item()):.4f} {float(self.dof[1].item()):.4f} {float(self.dof[2].item()):.4f}]"
+        #     )
+        # except Exception:
+        #     print(f"[RBSolver] forward: batch={batch_size}")
         losses = []
         all_frame_all_link_si = []
 
@@ -131,18 +130,18 @@ class RBSolver(nn.Module):
 
         loss = torch.stack(losses).mean()
         all_frame_all_link_si = torch.stack(all_frame_all_link_si)
-        # Unconditional debug
-        try:
-            pred0 = (all_frame_all_link_si[0] > 0.5).float()
-            gt0 = (masks_ref[0] > 0.5).float()
-            inter = (pred0 * gt0).sum()
-            union = (pred0 + gt0).clamp(max=1).sum()
-            iou0 = (inter / union).item() if union > 0 else 0.0
-            print(
-                f"[RBSolver] forward: loss={float(loss.item()):.6f}, iou0={float(iou0):.4f}"
-            )
-        except Exception:
-            print(f"[RBSolver] forward: loss={float(loss.item()):.6f}")
+
+        # try:
+        #     pred0 = (all_frame_all_link_si[0] > 0.5).float()
+        #     gt0 = (masks_ref[0] > 0.5).float()
+        #     inter = (pred0 * gt0).sum()
+        #     union = (pred0 + gt0).clamp(max=1).sum()
+        #     iou0 = (inter / union).item() if union > 0 else 0.0
+        #     print(
+        #         f"[RBSolver] forward: loss={float(loss.item()):.6f}, iou0={float(iou0):.4f}"
+        #     )
+        # except Exception:
+        #     print(f"[RBSolver] forward: loss={float(loss.item()):.6f}")
         output: Dict[str, Any] = {
             "rendered_masks": all_frame_all_link_si,
             "ref_masks": masks_ref,

@@ -26,9 +26,9 @@
     "calibration_offset": {
         "shoulder_pan": 10,
         "shoulder_lift": 10,
-        "elbow_flex": -5,
+        "elbow_flex": 1,
         "wrist_flex": 0,
         "wrist_roll": -7,
-        "gripper": 32.0
+        "gripper": -55
     }
 }
