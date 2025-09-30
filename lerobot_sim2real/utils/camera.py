@@ -1,5 +1,9 @@
 import numpy as np
-def scale_intrinsics(intrinsics, original_width, original_height, new_width, new_height):
+
+
+def scale_intrinsics(
+    intrinsics, original_width, original_height, new_width, new_height
+):
     """
     Given an 3x3 intrinsics matrix rescale it to a new width and height. Will rescale such that the center
     of the image stays the same and there is no additional distortion, effectively equivalent to a center crop.
