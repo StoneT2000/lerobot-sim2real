@@ -25,10 +25,9 @@ from easyhec.utils.camera_conversions import opencv2ros, ros2opencv
 from lerobot_sim2real.utils.urdf_utils import load_robot_meshes_for_calibration
 
 # Import our custom visualization function
-import sys
-
-sys.path.append(str(Path(__file__).parent.parent.parent))
-from custom_visualization import visualize_extrinsic_results_red_mask
+from lerobot_sim2real.utils.custom_visualization import (
+    visualize_extrinsic_results_red_mask,
+)
 # from easyhec import ROBOT_DEFINITIONS_DIR
 
 from lerobot_sim2real.config.real_robot import create_real_robot

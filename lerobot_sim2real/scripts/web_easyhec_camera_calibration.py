@@ -30,36 +30,13 @@ from easyhec.utils.camera_conversions import opencv2ros, ros2opencv
 from lerobot_sim2real.utils.urdf_utils import load_robot_meshes_for_calibration
 
 # Optional: red mask overlay visualization
-import sys
-
-sys.path.append(str(Path(__file__).parent.parent.parent))
-from custom_visualization import visualize_extrinsic_results_red_mask
+from lerobot_sim2real.utils.custom_visualization import (
+    visualize_extrinsic_results_red_mask,
+)
 
 from lerobot_sim2real.config.real_robot import create_real_robot
 from lerobot_sim2real.utils.camera import scale_intrinsics
 from lerobot_sim2real.optim.optimize_with_better_logging import optimize
-
-
-def _k_from_fov(
-    width: int, height: int, hfov_deg: Optional[float], vfov_deg: Optional[float]
-):
-    import math
-
-    cx = width / 2.0
-    cy = height / 2.0
-    fx = None
-    fy = None
-    if hfov_deg is not None:
-        fx = 0.5 * width / math.tan(math.radians(hfov_deg) / 2.0)
-    if vfov_deg is not None:
-        fy = 0.5 * height / math.tan(math.radians(vfov_deg) / 2.0)
-    if fx is not None and fy is None:
-        fy = fx * (width / height)
-    if fy is not None and fx is None:
-        fx = fy * (height / width)
-    if fx is None or fy is None:
-        return None
-    return np.array([[fx, 0, cx], [0, fy, cy], [0, 0, 1]], dtype=np.float32)
 
 
 def _normalize_sam2_cfg_name(cfg: str) -> str:
@@ -771,8 +748,8 @@ def main(args: SO101WebArgs):
         ).reshape(-1)[0]
     else:
         qpos_samples = [
-            np.array([0, 0, 0, np.pi / 2, np.pi / 2, 0]),
-            np.array([np.pi / 3, -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
+            np.array([0, 0, 0, np.pi / 2, 0, 0]),
+            np.array([np.pi / 3, -np.pi / 6, 0, np.pi / 2, np.pi / 6, 0]),
             np.array([-(np.pi / 3), -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
             # np.array([-np.pi / 4, -np.pi / 6, np.pi / 6, np.pi / 2, np.pi / 2, 0.1]),
             # np.array([0, 0, 0, 0, np.pi / 2, 0.2]),
