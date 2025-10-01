@@ -56,7 +56,6 @@ class RBSolver(nn.Module):
         # renderer
         self.H, self.W = self.cfg.camera_height, self.cfg.camera_width
         self.renderer = NVDiffrastRenderer(self.H, self.W)
-        self.register_buffer("history_ops", torch.zeros(10000, 6))
 
         # Unconditional debug
         try:
@@ -71,9 +70,6 @@ class RBSolver(nn.Module):
             print(f"[RBSolver] init: H={self.H} W={self.W} links={self.nlinks}")
 
     def forward(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        put_id = (self.history_ops == 0).all(dim=1).nonzero()[0, 0].item()
-        self.history_ops[put_id] = self.dof.detach()
-
         # Internal parameterization produces Tc_c2b (camera-to-base)
         Tc_c2b = utils_3d.se3_exp_map(self.dof[None]).permute(0, 2, 1)[0]
         # For rendering, we need world-to-camera (base->camera): Tw_w2c
