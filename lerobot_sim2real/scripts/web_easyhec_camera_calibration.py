@@ -572,7 +572,7 @@ def main(args: SO101WebArgs):
     }
 
     uid = "so101"
-    urdf_name = "so101_v2"
+    urdf_name = "so101"
 
     if args.env_kwargs_json_path is not None:
         with open(args.env_kwargs_json_path, "r") as f:
