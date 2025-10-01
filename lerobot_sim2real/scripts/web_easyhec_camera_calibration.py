@@ -427,7 +427,7 @@ class WebMaskAnnotator:
                     iterations=self.optim_iterations,
                     early_stopping_steps=self.optim_early_stopping,
                     return_history=True,
-                    learning_rate=0.003,
+                    learning_rate=0.0001,
                     batch_size=None,
                 )
 
@@ -548,9 +548,9 @@ class SO101WebArgs(Args):
     env_kwargs_json_path: Optional[str] = None
 
     # Training configuration - override base class defaults
-    train_steps: int = 10000
+    train_steps: int = 20000
     """number of optimization steps"""
-    early_stopping_steps: int = 2000
+    early_stopping_steps: int = 20000
     """if after this many steps of optimization the loss has not improved, then optimization will stop"""
 
     # Web UI options
@@ -600,8 +600,8 @@ def main(args: SO101WebArgs):
     for k in cameras_ft.keys():
         (Path(args.output_dir) / robot_id / k).mkdir(parents=True, exist_ok=True)
 
-    initial_extrinsic_x = 0.25
-    initial_extrinsic_y = 0.16
+    initial_extrinsic_x = 0.265
+    initial_extrinsic_y = 0.15
     initial_extrinsic_z = 0.79
 
     initial_extrinsic_x_rotation = 0.22
@@ -749,8 +749,8 @@ def main(args: SO101WebArgs):
     else:
         qpos_samples = [
             np.array([0, 0, 0, np.pi / 2, 0, 0]),
-            np.array([np.pi / 3, -np.pi / 6, 0, np.pi / 2, np.pi / 6, 0]),
-            np.array([-(np.pi / 3), -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
+            np.array([np.pi / 4, -np.pi / 6, 0, np.pi / 2, np.pi / 6, np.pi / 3]),
+            np.array([-(np.pi / 4), -np.pi / 6, 0, np.pi / 2, np.pi / 2, 0]),
             # np.array([-np.pi / 4, -np.pi / 6, np.pi / 6, np.pi / 2, np.pi / 2, 0.1]),
             # np.array([0, 0, 0, 0, np.pi / 2, 0.2]),
             # np.array([0, np.pi / 6, 0, 0, np.pi / 2, 0.2]),

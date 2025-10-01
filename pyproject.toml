@@ -17,6 +17,7 @@ dependencies = [
     "urchin>=0.0.29",
     "easyhec>=0.1.9",
     "nvdiffrast",
+    "sam-2",                     # Required for SAM2 segmentation in EasyHEC calibration
     "ninja>=1.13.0",
     "gradio>=5.46.1",
     "plotly>=6.3.0",
@@ -43,3 +44,4 @@ addopts = "-v --tb=short"
 
 [tool.uv.sources]
 nvdiffrast = { git = "https://github.com/NVlabs/nvdiffrast.git", rev = "729261dc64c4241ea36efda84fbf532cc8b425b8" }
+sam-2 = { path = "/home/jack/code/sam2", editable = true }
