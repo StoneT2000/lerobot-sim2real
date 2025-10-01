@@ -548,9 +548,9 @@ class SO101WebArgs(Args):
     env_kwargs_json_path: Optional[str] = None
 
     # Training configuration - override base class defaults
-    train_steps: int = 50000
+    train_steps: int = 2**14
     """number of optimization steps"""
-    early_stopping_steps: int = 20000
+    early_stopping_steps: int = 2**14
     """if after this many steps of optimization the loss has not improved, then optimization will stop"""
 
     # Web UI options

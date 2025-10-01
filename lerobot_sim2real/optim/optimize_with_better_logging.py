@@ -280,8 +280,8 @@ def optimize(
                 f"{grad_norm:.2e}" if grad_count > 0 else f"0.0 ({grad_count} params)"
             )
             pbar.set_description(
-                f"Step {i}/{iterations} | Loss: {loss_value:.6f}, Best: {best_loss:.6f}, Worst: {worst_loss:.6f}, "
-                f"Avg: {average_loss:.2f}, Std: {loss_std:.4f}, Grad: {grad_str}"
+                f"Step {i}/{iterations} | Loss: {loss_value:.6f}, Best: {best_loss:.6f} (step {last_loss_improvement_step}), "
+                f"Worst: {worst_loss:.6f}, Avg: {average_loss:.2f}, Std: {loss_std:.4f}, Grad: {grad_str}"
             )
         if "metrics" in output:
             pbar.set_postfix(output["metrics"])

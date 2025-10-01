@@ -24,11 +24,11 @@
         "robot_color": null
     },
     "calibration_offset": {
-        "shoulder_pan": 10,
-        "shoulder_lift": 10,
-        "elbow_flex": 1,
+        "shoulder_pan": 0,
+        "shoulder_lift": 0,
+        "elbow_flex": 0,
         "wrist_flex": 0,
-        "wrist_roll": -7,
+        "wrist_roll": 0,
         "gripper": -55
     }
 }
