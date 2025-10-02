@@ -12,8 +12,6 @@ import torch
 import tyro
 from lerobot_sim2real.config.real_robot import create_real_robot
 from lerobot_sim2real.rl.ppo_rgb import Agent
-
-from lerobot_sim2real.utils.camera import scale_intrinsics
 from lerobot_sim2real.utils.safety import setup_safe_exit
 from mani_skill.agents.robots.lerobot.manipulator import LeRobotRealAgent
 from mani_skill.envs.sim2real_env import Sim2RealEnv
@@ -39,7 +37,7 @@ class Args:
     robot more chances to recover from failures / solve the task."""
     num_episodes: Optional[int] = None
     """The number of episodes to evaluate for. If None, the evaluation will run until the user presses ctrl+c"""
-    env_id: str = "SO100GraspCube-v1"
+    env_id: str = "SO101GraspCubeLeRobotSim2Real-v1"
     """The environment id to use for evaluation. This should be the same as the environment id used for training."""
     seed: int = 1
     """seed of the experiment"""
@@ -47,7 +45,7 @@ class Args:
     """Directory to save recordings of the camera captured images. If none no recordings are saved"""
     control_freq: Optional[int] = 15
     """The control frequency of the real robot. For safety reasons we recommend setting this to 15Hz or lower as we permit the RL agent to take larger actions to move faster. If this is none, it will use the same control frequency the sim env uses."""
-    robot_uid: str = "so100"
+    robot_uid: str = "so101"
     """The robot UID to use (so100 or so101)"""
 
 
@@ -78,6 +76,9 @@ def main(args: Args):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
+    # Initialize calibration_offset to None in case no config is provided
+    calibration_offset = None
+
     env_kwargs = dict(
         obs_mode="rgb+segmentation",
         render_mode="sensors",  # only sensors mode is supported right now for real envs, basically rendering the direct visual observations fed to policy
@@ -85,16 +86,25 @@ def main(args: Args):
         domain_randomization=False,
         reward_mode="none",
     )
+
     if args.env_kwargs_json_path is not None:
+        # Use the camera calibration integration system
+        # The environment will load extrinsics/intrinsics from the file paths
         with open(args.env_kwargs_json_path, "r") as f:
             data = json.load(f)
-            calibration_offset = data.pop("calibration_offset")
-            env_kwargs.update(**data)
-        env_kwargs["base_camera_settings"]["extrinsics"] = np.load(
-            env_kwargs["base_camera_settings"]["extrinsics"]
+            calibration_offset = data.get("calibration_offset", None)
+
+        env_kwargs.update(
+            env_config_path=args.env_kwargs_json_path,
+            use_learned_camera=True,
+            domain_randomization=False,  # No DR for evaluation
         )
-        env_kwargs["base_camera_settings"]["intrinsics"] = np.load(
-            env_kwargs["base_camera_settings"]["intrinsics"]
+        print(f"Using camera calibration from {args.env_kwargs_json_path}")
+        print("Camera position and FOV will be loaded from extrinsics/intrinsics files")
+    else:
+        print("WARNING: No env_kwargs_json_path provided.")
+        print(
+            "The evaluation will use default camera settings, which may not match your trained policy!"
         )
 
     ### Create and connect the real robot, wrap it to make it interfaceable with ManiSkill sim2real environments ###
