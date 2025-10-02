@@ -27,13 +27,13 @@ obs_default = env_default.reset()
 if isinstance(obs_default, tuple):
     obs_default = obs_default[0]
 img_default = obs_default["sensor_data"]["base_camera"]["rgb"]
-if hasattr(img_default, 'cpu'):
+if hasattr(img_default, "cpu"):
     img_default = img_default.cpu().numpy()
 if img_default.ndim == 4:  # Remove batch dimension
     img_default = img_default[0]
 axes[0].imshow(img_default)
 axes[0].set_title("Default Camera")
-axes[0].axis('off')
+axes[0].axis("off")
 env_default.close()
 
 # Test 2: Calibrated camera
@@ -52,13 +52,13 @@ obs_calibrated = env_calibrated.reset()
 if isinstance(obs_calibrated, tuple):
     obs_calibrated = obs_calibrated[0]
 img_calibrated = obs_calibrated["sensor_data"]["base_camera"]["rgb"]
-if hasattr(img_calibrated, 'cpu'):
+if hasattr(img_calibrated, "cpu"):
     img_calibrated = img_calibrated.cpu().numpy()
 if img_calibrated.ndim == 4:  # Remove batch dimension
     img_calibrated = img_calibrated[0]
 axes[1].imshow(img_calibrated)
 axes[1].set_title("Calibrated Camera (Environment)")
-axes[1].axis('off')
+axes[1].axis("off")
 env_calibrated.close()
 
 # Test 3: Reference render
@@ -67,10 +67,10 @@ if ref_path.exists():
     ref_img = plt.imread(str(ref_path))
     axes[2].imshow(ref_img)
     axes[2].set_title("Calibrated Camera (Render Script)")
-    axes[2].axis('off')
+    axes[2].axis("off")
 else:
-    axes[2].text(0.5, 0.5, "Reference not found", ha='center', va='center')
-    axes[2].axis('off')
+    axes[2].text(0.5, 0.5, "Reference not found", ha="center", va="center")
+    axes[2].axis("off")
 
 plt.tight_layout()
 plt.savefig("camera_comparison.png", dpi=150)

@@ -174,14 +174,14 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
                 # Use the calibrated pose directly - don't try to compute pos/target
                 # The pose will be used in sample_camera_poses
                 logger.info(f"Loaded camera calibration from {config_path}")
-                
+
                 # Log the actual calibrated position for debugging
                 pose = self.calibration_data["pose"]
                 logger.info(f"  Camera position: {pose.p.tolist()}")
                 logger.info(
                     f"  Camera FOV: {np.rad2deg(self.calibration_data['fov']):.2f} degrees"
                 )
-                
+
                 # Also update base_camera_settings for compatibility, but use the
                 # look_at approach to ensure consistent orientation
                 extrinsic = self.calibration_data["extrinsic_opencv"]
@@ -189,11 +189,11 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
                 # Calculate where camera is looking based on its Z axis (forward direction)
                 cam_forward = extrinsic[:3, 2]
                 cam_target = cam_pos + cam_forward * 0.5  # Look 0.5m forward
-                
+
                 self.base_camera_settings["pos"] = cam_pos.tolist()
                 self.base_camera_settings["target"] = cam_target.tolist()
                 self.base_camera_settings["fov"] = float(self.calibration_data["fov"])
-                
+
                 logger.info(f"  Camera target: {cam_target.tolist()}")
         except Exception as e:
             logger.warning(f"Failed to load camera calibration from {config_path}: {e}")
@@ -214,12 +214,16 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
 
         # Get current joint positions
         current_qpos = self.agent.robot.get_qpos()
-        
+
         # Get the names of controllable joints (those that appear in qpos)
         # For SO101, these are the first 6 joints: shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, and the gripper control
         controllable_joint_names = [
-            "shoulder_pan", "shoulder_lift", "elbow_flex", 
-            "wrist_flex", "wrist_roll", "gripper"
+            "shoulder_pan",
+            "shoulder_lift",
+            "elbow_flex",
+            "wrist_flex",
+            "wrist_roll",
+            "gripper",
         ]
 
         # Apply offsets to matching joints

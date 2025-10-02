@@ -41,7 +41,7 @@ print(f"  Quaternion: {unwrapped.camera_mount.pose.q}")
 cameras = unwrapped._sensors["base_camera"]
 if hasattr(cameras, "_sensor_poses"):
     print(f"\nCamera sensor poses: {cameras._sensor_poses}")
-    
+
 # Check the actual camera configuration
 # print(f"\nCamera FOV: {np.rad2deg(cameras.fov)} degrees")
 
@@ -62,7 +62,7 @@ default_params = default_obs["sensor_param"]["base_camera"]
 print(f"  Default extrinsic_cv:\n{default_params['extrinsic_cv']}")
 
 # Check if they're the same
-if np.allclose(sensor_params['extrinsic_cv'], default_params['extrinsic_cv']):
+if np.allclose(sensor_params["extrinsic_cv"], default_params["extrinsic_cv"]):
     print("\nWARNING: Camera extrinsics are the same as default!")
 else:
     print("\nGood: Camera extrinsics are different from default")
