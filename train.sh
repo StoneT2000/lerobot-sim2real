@@ -14,7 +14,7 @@ cd "$SCRIPT_DIR"
 # - You can monitor progress with: tail -f training_*.log
 # - To stop training: ps aux | grep train_ppo_rgb.py then kill <PID>
 
-seed=46
+seed=47
 python -m lerobot_sim2real.scripts.train_ppo_rgb \
   --env-id="SO101GraspCubeLeRobotSim2Real-v1" \
   --env-kwargs-json-path=env_config.json \

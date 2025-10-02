@@ -238,11 +238,20 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
 
     @property
     def _default_human_render_camera_configs(self):
-        # this camera and angle is simply used for visualization purposes, not policy observations
-        pose = sapien_utils.look_at([0.5, 0.3, 0.35], [0.3, 0.0, 0.1])
-        return CameraConfig(
-            "render_camera", pose, 512, 512, 52 * np.pi / 180, 0.01, 100
-        )
+        # Use the same camera view as the observation camera for consistent video recording
+        if self.use_learned_camera and self.calibration_data:
+            # Use calibrated camera position and target
+            pose = sapien_utils.look_at(
+                eye=self.base_camera_settings["pos"],
+                target=self.base_camera_settings["target"],
+            )
+            fov = self.calibration_data["fov"]
+        else:
+            # Default visualization camera
+            pose = sapien_utils.look_at([0.5, 0.3, 0.35], [0.3, 0.0, 0.1])
+            fov = 52 * np.pi / 180
+
+        return CameraConfig("render_camera", pose, 512, 512, fov, 0.01, 100)
 
     def _load_agent(self, options: dict):
         # load the robot arm at this initial pose
