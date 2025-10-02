@@ -22,12 +22,20 @@ class Args:
 def main(args: Args):
     args.ppo.env_id = args.env_id
     if args.env_kwargs_json_path is not None:
-        with open(args.env_kwargs_json_path, "r") as f:
-            env_kwargs = json.load(f)
-            calibration_offset = env_kwargs.pop("calibration_offset")
-        env_kwargs["base_camera_settings"]["extrinsics"] = np.load(env_kwargs["base_camera_settings"]["extrinsics"])
-        env_kwargs["base_camera_settings"]["intrinsics"] = np.load(env_kwargs["base_camera_settings"]["intrinsics"])
+        # Use the camera calibration integration system
+        # The environment will load extrinsics/intrinsics from the file paths
+        env_kwargs = {
+            "env_config_path": args.env_kwargs_json_path,
+            "use_learned_camera": True,
+            "domain_randomization": True,  # Enable DR for training
+            "domain_randomization_config": {
+                "randomize_around_calibrated_camera": True,  # Randomize around calibrated pose
+                "apply_calibration_offset_noise": False,  # Could enable for more robustness
+            },
+        }
         args.ppo.env_kwargs = env_kwargs
+        print(f"Using camera calibration from {args.env_kwargs_json_path}")
+        print("Camera position and FOV will be loaded from extrinsics/intrinsics files")
     else:
         print(
             "No env kwargs json path provided, using default env kwargs with default settings"

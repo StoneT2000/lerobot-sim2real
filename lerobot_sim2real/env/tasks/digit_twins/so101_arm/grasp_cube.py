@@ -200,54 +200,6 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
             logger.warning("Using default camera settings")
             self.calibration_data = None
 
-    def _apply_calibration_offsets(self) -> None:
-        """Apply calibration offsets to robot joints."""
-        if (
-            not self.calibration_data
-            or "calibration_offset" not in self.calibration_data
-        ):
-            return
-
-        offsets = self.calibration_data["calibration_offset"]
-        if not offsets:
-            return
-
-        # Get current joint positions
-        current_qpos = self.agent.robot.get_qpos()
-
-        # Get the names of controllable joints (those that appear in qpos)
-        # For SO101, these are the first 6 joints: shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, and the gripper control
-        controllable_joint_names = [
-            "shoulder_pan",
-            "shoulder_lift",
-            "elbow_flex",
-            "wrist_flex",
-            "wrist_roll",
-            "gripper",
-        ]
-
-        # Apply offsets to matching joints
-        for i, joint_name in enumerate(controllable_joint_names):
-            if i < current_qpos.shape[1] and joint_name in offsets:
-                offset_deg = offsets[joint_name]
-                offset_rad = np.deg2rad(offset_deg)
-                if (
-                    self.domain_randomization
-                    and self.domain_randomization_config.apply_calibration_offset_noise
-                ):
-                    # Add noise to calibration offset
-                    noise_scale = (
-                        self.domain_randomization_config.calibration_offset_noise_scale
-                    )
-                    offset_rad += self._batched_episode_rng.normal(0, noise_scale)
-                current_qpos[:, i] += offset_rad
-                logger.debug(
-                    f"Applied calibration offset to {joint_name}: {offset_deg}° ({offset_rad:.4f} rad)"
-                )
-
-        # Set updated positions
-        self.agent.robot.set_qpos(current_qpos)
-
     @property
     def _default_sim_config(self):
         return SimConfig(sim_freq=100, control_freq=20)
@@ -322,9 +274,7 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
         self.table_scene = TableSceneBuilder(self)
         self.table_scene.build()
 
-        # Apply calibration offsets to robot if available
-        if self.calibration_data and "calibration_offset" in self.calibration_data:
-            self._apply_calibration_offsets()
+        # Note: Calibration offsets will be applied in _initialize_episode after robot is ready
 
         # some default values for cube geometry
         half_sizes = (
@@ -513,9 +463,38 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
             self.table_scene.table.set_pose(self.table_pose)
 
             # sample a random initial joint configuration for the robot
-            self.agent.robot.set_qpos(
+            initial_qpos = (
                 self.rest_qpos + torch.randn(size=(b, self.rest_qpos.shape[-1])) * 0.02
             )
+
+            # Apply calibration offsets if available (only on first episode)
+            if (
+                self.calibration_data
+                and "calibration_offset" in self.calibration_data
+                and not hasattr(self, "_calibration_applied")
+            ):
+                offsets = self.calibration_data["calibration_offset"]
+                controllable_joint_names = [
+                    "shoulder_pan",
+                    "shoulder_lift",
+                    "elbow_flex",
+                    "wrist_flex",
+                    "wrist_roll",
+                    "gripper",
+                ]
+
+                for i, joint_name in enumerate(controllable_joint_names):
+                    if i < initial_qpos.shape[1] and joint_name in offsets:
+                        offset_deg = offsets[joint_name]
+                        offset_rad = np.deg2rad(offset_deg)
+                        initial_qpos[:, i] += offset_rad
+                        logger.debug(
+                            f"Applied calibration offset to {joint_name}: {offset_deg}° ({offset_rad:.4f} rad)"
+                        )
+
+                self._calibration_applied = True
+
+            self.agent.robot.set_qpos(initial_qpos)
             self.agent.robot.set_pose(
                 Pose.create_from_pq(p=[0, 0, 0], q=euler2quat(0, 0, 0))
             )
