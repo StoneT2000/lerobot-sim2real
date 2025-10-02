@@ -20,6 +20,7 @@ from mani_skill.utils.scene_builder.table import TableSceneBuilder
 from mani_skill.utils.structs.actor import Actor
 from mani_skill.utils.structs.pose import Pose
 from mani_skill.utils.structs.types import SimConfig
+from lerobot_sim2real.utils.calibration import load_camera_calibration
 
 
 # there are many ways to parameterize an environment's domain randomization. This is a simple way to do it
@@ -42,6 +43,16 @@ class SO101GraspCubeDomainRandomizationConfig:
     """scale of noise added to the camera view rotation"""
     camera_fov_noise: float = np.deg2rad(2)
     """scale of noise added to the camera fov"""
+
+    ### Calibration-related randomization ###
+    randomize_around_calibrated_camera: bool = False
+    """If True, randomize camera around calibrated pose instead of base_camera_settings"""
+
+    apply_calibration_offset_noise: bool = False
+    """If True, add noise to calibration offsets"""
+
+    calibration_offset_noise_scale: float = 0.01
+    """Scale of noise added to calibration offsets (in radians)"""
 
     ### task-specific related domain randomizations that occur during scene loading ###
     cube_half_size_range: Sequence[float] = (0.022 / 2, 0.028 / 2)
@@ -88,6 +99,9 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
         ),
         spawn_box_pos=[0.30, 0.05],
         spawn_box_half_size=0.2 / 2,
+        env_config_path: Optional[str] = None,
+        use_learned_camera: bool = False,
+        override_camera_settings: Optional[dict] = None,
         **kwargs,
     ):
         self.domain_randomization = domain_randomization
@@ -106,6 +120,19 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
             )
         self.base_camera_settings = base_camera_settings
         """what the camera fov, position and target are when domain randomization is off. DR is centered around these settings"""
+
+        # Camera calibration integration
+        self.env_config_path = env_config_path
+        self.use_learned_camera = use_learned_camera
+        self.override_camera_settings = override_camera_settings
+        self.calibration_data = None
+
+        # Load calibration data if requested
+        if self.use_learned_camera and self.env_config_path:
+            self._load_camera_from_config(self.env_config_path)
+        elif self.override_camera_settings:
+            # Allow manual override of camera settings
+            self.base_camera_settings.update(self.override_camera_settings)
 
         if greenscreen_overlay_path is None:
             logger.warning(
@@ -132,6 +159,91 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
             *args, robot_uids=robot_uids, control_mode=control_mode, **kwargs
         )
 
+    def _load_camera_from_config(self, config_path: str) -> None:
+        """Load camera settings from calibration config."""
+        try:
+            # Load calibration data with target resolution from sensor config
+            self.calibration_data = load_camera_calibration(
+                config_path,
+                target_width=128,  # Default sensor width
+                target_height=128,  # Default sensor height
+            )
+
+            # Update base camera settings with calibrated values
+            if self.calibration_data:
+                # Use the calibrated pose directly - don't try to compute pos/target
+                # The pose will be used in sample_camera_poses
+                logger.info(f"Loaded camera calibration from {config_path}")
+                
+                # Log the actual calibrated position for debugging
+                pose = self.calibration_data["pose"]
+                logger.info(f"  Camera position: {pose.p.tolist()}")
+                logger.info(
+                    f"  Camera FOV: {np.rad2deg(self.calibration_data['fov']):.2f} degrees"
+                )
+                
+                # Also update base_camera_settings for compatibility, but use the
+                # look_at approach to ensure consistent orientation
+                extrinsic = self.calibration_data["extrinsic_opencv"]
+                cam_pos = extrinsic[:3, 3]
+                # Calculate where camera is looking based on its Z axis (forward direction)
+                cam_forward = extrinsic[:3, 2]
+                cam_target = cam_pos + cam_forward * 0.5  # Look 0.5m forward
+                
+                self.base_camera_settings["pos"] = cam_pos.tolist()
+                self.base_camera_settings["target"] = cam_target.tolist()
+                self.base_camera_settings["fov"] = float(self.calibration_data["fov"])
+                
+                logger.info(f"  Camera target: {cam_target.tolist()}")
+        except Exception as e:
+            logger.warning(f"Failed to load camera calibration from {config_path}: {e}")
+            logger.warning("Using default camera settings")
+            self.calibration_data = None
+
+    def _apply_calibration_offsets(self) -> None:
+        """Apply calibration offsets to robot joints."""
+        if (
+            not self.calibration_data
+            or "calibration_offset" not in self.calibration_data
+        ):
+            return
+
+        offsets = self.calibration_data["calibration_offset"]
+        if not offsets:
+            return
+
+        # Get current joint positions
+        current_qpos = self.agent.robot.get_qpos()
+        
+        # Get the names of controllable joints (those that appear in qpos)
+        # For SO101, these are the first 6 joints: shoulder_pan, shoulder_lift, elbow_flex, wrist_flex, wrist_roll, and the gripper control
+        controllable_joint_names = [
+            "shoulder_pan", "shoulder_lift", "elbow_flex", 
+            "wrist_flex", "wrist_roll", "gripper"
+        ]
+
+        # Apply offsets to matching joints
+        for i, joint_name in enumerate(controllable_joint_names):
+            if i < current_qpos.shape[1] and joint_name in offsets:
+                offset_deg = offsets[joint_name]
+                offset_rad = np.deg2rad(offset_deg)
+                if (
+                    self.domain_randomization
+                    and self.domain_randomization_config.apply_calibration_offset_noise
+                ):
+                    # Add noise to calibration offset
+                    noise_scale = (
+                        self.domain_randomization_config.calibration_offset_noise_scale
+                    )
+                    offset_rad += self._batched_episode_rng.normal(0, noise_scale)
+                current_qpos[:, i] += offset_rad
+                logger.debug(
+                    f"Applied calibration offset to {joint_name}: {offset_deg}° ({offset_rad:.4f} rad)"
+                )
+
+        # Set updated positions
+        self.agent.robot.set_qpos(current_qpos)
+
     @property
     def _default_sim_config(self):
         return SimConfig(sim_freq=100, control_freq=20)
@@ -141,19 +253,27 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
         # we just set a default camera pose here for now. For sim2real we will modify this during training accordingly.
         # note that we pass in the camera mount which is created in the _load_scene function later. This mount lets us
         # randomize camera poses at each environment step. Here we just randomize some camera configuration like fov.
+
+        # Determine base FOV
+        if self.use_learned_camera and self.calibration_data:
+            base_fov = self.calibration_data["fov"]
+        else:
+            base_fov = self.base_camera_settings["fov"]
+
         if self.domain_randomization:
             camera_fov_noise = self.domain_randomization_config.camera_fov_noise * (
                 2 * self._batched_episode_rng.rand() - 1
             )
         else:
             camera_fov_noise = 0
+
         return [
             CameraConfig(
                 "base_camera",
                 pose=sapien.Pose(),
                 width=128,
                 height=128,
-                fov=camera_fov_noise + self.base_camera_settings["fov"],
+                fov=camera_fov_noise + base_fov,
                 near=0.01,
                 far=100,
                 mount=self.camera_mount,
@@ -197,6 +317,10 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
         # where the 0, 0, 0 position is the center of the table
         self.table_scene = TableSceneBuilder(self)
         self.table_scene.build()
+
+        # Apply calibration offsets to robot if available
+        if self.calibration_data and "calibration_offset" in self.calibration_data:
+            self._apply_calibration_offsets()
 
         # some default values for cube geometry
         half_sizes = (
@@ -287,6 +411,8 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
         builder.initial_pose = sapien.Pose()
         self.camera_mount = builder.build_kinematic("camera_mount")
 
+        # Camera mount pose will be set in _initialize_episode or sample_camera_poses
+
         # randomize or set a fixed robot color
         if self.domain_randomization_config.robot_color is not None:
             for link in self.agent.robot.links:
@@ -322,14 +448,31 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
         # the way this works is we first sample "eyes", which are the camera positions
         # then we use the noised_look_at function to sample the full camera poses given the sampled eyes
         # and a target position the camera is pointing at
+
+        # Note: We removed the early return for calibrated pose here because
+        # we now always use look_at to ensure consistent camera orientation
+
         if self.domain_randomization:
-            # in case these haven't been moved to torch tensors on the environment device
-            self.base_camera_settings["pos"] = common.to_tensor(
-                self.base_camera_settings["pos"], device=self.device
-            )
-            self.base_camera_settings["target"] = common.to_tensor(
-                self.base_camera_settings["target"], device=self.device
-            )
+            # Determine center position for randomization
+            if (
+                self.use_learned_camera
+                and self.calibration_data
+                and self.domain_randomization_config.randomize_around_calibrated_camera
+            ):
+                # Use calibrated pose as center for randomization
+                center_pos = self.calibration_data["pose"].p
+                # Extract approximate target from calibrated pose
+                pose_matrix = self.calibration_data["pose"].to_transformation_matrix()
+                forward = pose_matrix[:3, 2]  # z-axis is forward
+                target_pos = center_pos - forward * 0.5
+            else:
+                # Use base camera settings
+                center_pos = self.base_camera_settings["pos"]
+                target_pos = self.base_camera_settings["target"]
+
+            # Convert to tensors
+            center_pos = common.to_tensor(center_pos, device=self.device)
+            target_pos = common.to_tensor(target_pos, device=self.device)
             self.domain_randomization_config.max_camera_offset = common.to_tensor(
                 self.domain_randomization_config.max_camera_offset, device=self.device
             )
@@ -337,18 +480,20 @@ class SO101GraspCubeEnv(BaseDigitalTwinEnv):
             eyes = randomization.camera.make_camera_rectangular_prism(
                 n,
                 scale=self.domain_randomization_config.max_camera_offset,
-                center=self.base_camera_settings["pos"],
+                center=center_pos,
                 theta=0,
                 device=self.device,
             )
             return randomization.camera.noised_look_at(
                 eyes,
-                target=self.base_camera_settings["target"],
+                target=target_pos,
                 look_at_noise=self.domain_randomization_config.camera_target_noise,
                 view_axis_rot_noise=self.domain_randomization_config.camera_view_rot_noise,
                 device=self.device,
             )
         else:
+            # No randomization - use fixed camera pose
+            # Always use look_at to ensure consistent camera orientation
             return sapien_utils.look_at(
                 eye=self.base_camera_settings["pos"],
                 target=self.base_camera_settings["target"],

@@ -1,18 +1,8 @@
 {
     "base_camera_settings": {
         "extrinsics": "results/so101/so101_follower/base_camera/camera_extrinsic_ros.npy",
-        "intrinsics": "results/so101/so101_follower/base_camera/camera_intrinsic_128x128.npy",
-        "pos": [
-            0.72,
-            0.3368,
-            0.3067
-        ],
-        "fov": 0.9025,
-        "target": [
-            0.185,
-            -0.15,
-            0.0
-        ]
+        "intrinsics": "results/so101/so101_follower/base_camera/camera_intrinsic.npy",
+        "comment": "pos, fov, and target here are ignored - actual values come from extrinsics/intrinsics files"
     },
     "greenscreen_overlay_path": "",
     "spawn_box_pos": [

@@ -17,24 +17,18 @@ import json
 import time
 import signal
 import sys
-from typing import Optional
 from pathlib import Path
 import gymnasium as gym
 import torch
 import numpy as np
-from lerobot_sim2real.utils.safety import setup_safe_exit
-from mani_skill.utils.wrappers.flatten import FlattenRGBDObservationWrapper
 from lerobot_sim2real.config.real_robot import create_real_robot
 from lerobot_sim2real.agents.robots.so101.lerobot_manipulator import LeRobotRealAgent
-from mani_skill.envs.sim2real_env import Sim2RealEnv
 import matplotlib.pyplot as plt
 from dataclasses import dataclass
-import threading
+import tyro
 
 # Import the environment to register it with gymnasium
-from lerobot_sim2real.env.tasks.digit_twins.so101_arm.grasp_cube import (
-    SO101GraspCubeEnv,
-)
+import lerobot_sim2real.env.tasks.digit_twins.so101_arm.grasp_cube
 
 
 @dataclass
@@ -48,12 +42,14 @@ class CalibrationData:
 
 
 class SO101CalibrationTester:
-    def __init__(self):
+    def __init__(self, test_camera_view=False, env_config_path=None):
         self.real_robot = None
         self.real_agent = None
         self.sim_env = None
         self.real_env = None
         self.running = True
+        self.test_camera_view = test_camera_view
+        self.env_config_path = env_config_path or "env_config.json"
         self.joint_names = [
             "shoulder_pan",
             "shoulder_lift",
@@ -66,7 +62,7 @@ class SO101CalibrationTester:
         # Load calibration offsets (degrees) from env_config.json if present
         self.offset_deg = {j: 0.0 for j in self.joint_names}
         try:
-            cfg_path = Path(__file__).parent / "env_config.json"
+            cfg_path = Path(self.env_config_path)
             if cfg_path.exists():
                 with cfg_path.open("r") as f:
                     cfg = json.load(f)
@@ -76,9 +72,7 @@ class SO101CalibrationTester:
                             self.offset_deg[j] = float(v)
                 print(f"Loaded calibration offsets (deg): {self.offset_deg}")
             else:
-                print(
-                    "No env_config.json found next to this script; using zero offsets."
-                )
+                print(f"No {self.env_config_path} found; using zero offsets.")
         except Exception as e:
             print(f"Warning: failed to load calibration offsets: {e}")
         self.setup_signal_handlers()
@@ -120,13 +114,30 @@ class SO101CalibrationTester:
         """Setup ManiSkill simulation environment"""
         print("Setting up simulation environment...")
 
+        # Note: render_mode controls the visualization backend:
+        # - "human": Opens interactive viewer window
+        # - "rgb_array": Returns RGB frames (for recording)
+        # - "cameras": Returns all camera views
+        #
+        # For testing camera calibration, we want BOTH:
+        # 1. Interactive viewer to see robot movement (render_mode="human")
+        # 2. Camera observations to verify calibration (obs_mode="rgb+segmentation")
+
         env_kwargs = dict(
-            obs_mode="none",  # No observations needed
+            obs_mode="rgb+segmentation" if self.test_camera_view else "none",
             control_mode="pd_joint_pos",
             sim_backend="physx_cpu",
             # sim_freq=100,
             # control_freq=20,
         )
+
+        # Add camera calibration parameters if testing camera view
+        if self.test_camera_view and Path(self.env_config_path).exists():
+            env_kwargs.update(
+                env_config_path=self.env_config_path,
+                use_learned_camera=True,
+                domain_randomization=False,  # No DR for testing
+            )
 
         # Ensure SAPIEN uses OpenGL if Vulkan is unstable
         import os
@@ -267,15 +278,97 @@ Starting calibration test...
 """
         print(instructions)
 
+    def setup_camera_view_comparison(self):
+        """Setup side-by-side view: learned camera vs default camera"""
+        if not self.test_camera_view:
+            return
+
+        # Create figure for visualization
+        self.fig, (self.ax1, self.ax2) = plt.subplots(1, 2, figsize=(12, 6))
+        self.ax1.set_title("Learned Camera View")
+        self.ax2.set_title("Reference Render")
+        self.ax1.axis("off")
+        self.ax2.axis("off")
+        plt.ion()
+        plt.show()
+
+    def update_camera_views(self):
+        """Update camera view comparison display"""
+        if not self.test_camera_view:
+            return
+
+        try:
+            # Get observation from environment
+            obs = self.sim_env.unwrapped.get_obs()
+            if isinstance(obs, dict) and "rgb" in obs:
+                # Extract base camera view
+                if "base_camera" in obs["rgb"]:
+                    learned_view = obs["rgb"]["base_camera"]
+                    # Convert to numpy if tensor
+                    if hasattr(learned_view, "cpu"):
+                        learned_view = learned_view.cpu().numpy()
+                    # Handle batch dimension
+                    if learned_view.ndim == 4:
+                        learned_view = learned_view[0]
+
+                    self.ax1.clear()
+                    self.ax1.imshow(learned_view)
+                    self.ax1.set_title("Learned Camera View")
+                    self.ax1.axis("off")
+
+            # Update reference if available
+            if hasattr(self, "reference_image") and self.reference_image is not None:
+                self.ax2.clear()
+                self.ax2.imshow(self.reference_image)
+                self.ax2.set_title("Reference Render")
+                self.ax2.axis("off")
+
+            plt.draw()
+            plt.pause(0.001)
+        except Exception as e:
+            print(f"Error updating camera views: {e}")
+
+    def load_reference_render(self):
+        """Load reference render from render_urdf_from_learned_camera.py output"""
+        if not self.test_camera_view:
+            return False
+
+        ref_path = (
+            Path(self.env_config_path).parent
+            / "results"
+            / "debug_so101_extrinsic"
+            / "rendered_view.png"
+        )
+        if not ref_path.exists():
+            # Try alternative path
+            ref_path = Path("results/debug_so101_extrinsic/rendered_view.png")
+
+        if ref_path.exists():
+            self.reference_image = plt.imread(str(ref_path))
+            print(f"Loaded reference render from {ref_path}")
+            return True
+        else:
+            print(f"Reference render not found at {ref_path}")
+            print("Run render_urdf_from_learned_camera.py first to generate reference")
+            self.reference_image = None
+            return False
+
     def run_calibration_loop(self):
         """Main calibration loop"""
         self.print_calibration_instructions()
+
+        # Setup camera view comparison if requested
+        if self.test_camera_view:
+            self.setup_camera_view_comparison()
+            self.load_reference_render()
 
         # Wait for user to be ready
         input("Press Enter when ready to start calibration testing...")
 
         print("\nStarting real-time joint mirroring...")
         print("Move the real robot and watch the simulation follow!")
+        if self.test_camera_view:
+            print("Camera views will be displayed in separate window")
 
         last_print_time = time.time()
         print_interval = 1.0  # Print every 1 second
@@ -301,6 +394,10 @@ Starting calibration test...
 
                 # Render simulation
                 self.sim_env.render()
+
+                # Update camera views if in camera test mode
+                if self.test_camera_view:
+                    self.update_camera_views()
 
                 # Control loop frequency (aim for ~30Hz)
                 loop_time = time.time() - loop_start
@@ -377,9 +474,28 @@ Starting calibration test...
             self.cleanup()
 
 
+@dataclass
+class Args:
+    """Arguments for SO101 calibration testing."""
+
+    test_camera_view: bool = False
+    """If True, test camera calibration by showing camera views"""
+
+    env_config_path: str = "env_config.json"
+    """Path to environment config JSON file containing camera calibration"""
+
+
 def main():
     """Main entry point"""
-    tester = SO101CalibrationTester()
+    args = tyro.cli(Args)
+
+    print("SO101 Sim2Real Calibration Tester")
+    print(f"Test camera view: {args.test_camera_view}")
+    print(f"Config path: {args.env_config_path}")
+
+    tester = SO101CalibrationTester(
+        test_camera_view=args.test_camera_view, env_config_path=args.env_config_path
+    )
     tester.run()
 
 
