@@ -1,0 +1,47 @@
+[project]
+name = "lerobot_sim2real"
+version = "0.0.1"
+description = "Sim2Real Manipulation with LeRobot"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "lerobot==0.3.3",
+    "mani_skill==v3.0.0b21",
+    "tensorboard",
+    "wandb",
+    "feetech-servo-sdk",         # Required for Feetech motors used by SO100 robot
+    "pyrealsense2",              # Required for RealSense cameras
+    "fastapi>=0.100.0",          # Required for camera alignment web app
+    "uvicorn[standard]>=0.23.0", # ASGI server for FastAPI
+    "websockets>=11.0",          # WebSocket support
+    "urchin>=0.0.29",
+    "easyhec>=0.1.9",
+    "nvdiffrast",
+    "sam-2",                     # Required for SAM2 segmentation in EasyHEC calibration
+    "ninja>=1.13.0",
+    "gradio>=5.46.1",
+    "plotly>=6.3.0",
+    "numpy>=1.26.4",
+    "trimesh>=4.8.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/StoneT2000/lerobot-sim2real"
+
+[build-system]
+requires = ["setuptools>=62.3.0"]
+build-backend = "setuptools.build_meta"
+
+[dependency-groups]
+dev = ["pytest>=8.0.0", "pytest-cov>=4.1.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.uv.sources]
+nvdiffrast = { git = "https://github.com/NVlabs/nvdiffrast.git", rev = "729261dc64c4241ea36efda84fbf532cc8b425b8" }
+sam-2 = { path = "/home/jack/code/sam2", editable = true }

@@ -12,7 +12,6 @@ import torch
 import tyro
 from lerobot_sim2real.config.real_robot import create_real_robot
 from lerobot_sim2real.rl.ppo_rgb import Agent
-
 from lerobot_sim2real.utils.safety import setup_safe_exit
 from mani_skill.agents.robots.lerobot.manipulator import LeRobotRealAgent
 from mani_skill.envs.sim2real_env import Sim2RealEnv
@@ -21,6 +20,8 @@ from mani_skill.utils.wrappers.record import RecordEpisode
 from tqdm import tqdm
 from mani_skill.utils.visualization import tile_images
 import matplotlib.pyplot as plt
+
+
 @dataclass
 class Args:
     checkpoint: Optional[str] = None
@@ -31,12 +32,12 @@ class Args:
     """if toggled, the sim and real envs will be visualized side by side"""
     continuous_eval: bool = True
     """If toggled, the evaluation will run until episode ends without user input. If false, at each timestep the user will be prompted to press enter to let the robot continue"""
-    max_episode_steps: int = 100
+    max_episode_steps: int = 150
     """The maximum number of control steps the real robot can take before we stop the episode and reset the environment. It is recommended to set this number to be larger than the value the sim env is set to, that way you can permit the
     robot more chances to recover from failures / solve the task."""
     num_episodes: Optional[int] = None
     """The number of episodes to evaluate for. If None, the evaluation will run until the user presses ctrl+c"""
-    env_id: str = "SO100GraspCube-v1"
+    env_id: str = "SO101GraspCubeLeRobotSim2Real-v1"
     """The environment id to use for evaluation. This should be the same as the environment id used for training."""
     seed: int = 1
     """seed of the experiment"""
@@ -44,6 +45,9 @@ class Args:
     """Directory to save recordings of the camera captured images. If none no recordings are saved"""
     control_freq: Optional[int] = 15
     """The control frequency of the real robot. For safety reasons we recommend setting this to 15Hz or lower as we permit the RL agent to take larger actions to move faster. If this is none, it will use the same control frequency the sim env uses."""
+    robot_uid: str = "so101"
+    """The robot UID to use (so100 or so101)"""
+
 
 def overlay_envs(sim_env, real_env):
     """
@@ -53,9 +57,9 @@ def overlay_envs(sim_env, real_env):
     """
     real_obs = real_env.get_obs()["sensor_data"]
     sim_obs = sim_env.get_obs()["sensor_data"]
-    assert sorted(real_obs.keys()) == sorted(
-        sim_obs.keys()
-    ), f"real camera names {real_obs.keys()} and sim camera names {sim_obs.keys()} differ"
+    assert sorted(real_obs.keys()) == sorted(sim_obs.keys()), (
+        f"real camera names {real_obs.keys()} and sim camera names {sim_obs.keys()} differ"
+    )
 
     overlaid_dict = sim_env.get_obs()["sensor_data"]
     overlaid_imgs = []
@@ -66,42 +70,66 @@ def overlay_envs(sim_env, real_env):
 
     return tile_images(overlaid_imgs), real_imgs, sim_imgs
 
+
 def main(args: Args):
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    ### Create and connect the real robot, wrap it to make it interfaceable with ManiSkill sim2real environments ###    
-    real_robot = create_real_robot(uid="so100")
-    real_robot.connect()
-    real_agent = LeRobotRealAgent(real_robot)
+    # Initialize calibration_offset to None in case no config is provided
+    calibration_offset = None
 
-    ### Setup the sim environment to make various checks for sim2real alignment and debugging possible ###
     env_kwargs = dict(
         obs_mode="rgb+segmentation",
-        render_mode="sensors", # only sensors mode is supported right now for real envs, basically rendering the direct visual observations fed to policy
-        max_episode_steps=args.max_episode_steps, # give our robot more time to try and re-try the task
+        render_mode="sensors",  # only sensors mode is supported right now for real envs, basically rendering the direct visual observations fed to policy
+        max_episode_steps=args.max_episode_steps,  # give our robot more time to try and re-try the task
         domain_randomization=False,
-        reward_mode="none"
+        reward_mode="none",
     )
 
     if args.env_kwargs_json_path is not None:
+        # Use the camera calibration integration system
+        # The environment will load extrinsics/intrinsics from the file paths
         with open(args.env_kwargs_json_path, "r") as f:
-            env_kwargs.update(json.load(f))
-    
-    sim_env = gym.make(
-        args.env_id,
-        **env_kwargs
-    )
+            data = json.load(f)
+            calibration_offset = data.get("calibration_offset", None)
+
+        env_kwargs.update(
+            env_config_path=args.env_kwargs_json_path,
+            use_learned_camera=True,
+            domain_randomization=False,  # No DR for evaluation
+        )
+        print(f"Using camera calibration from {args.env_kwargs_json_path}")
+        print("Camera position and FOV will be loaded from extrinsics/intrinsics files")
+    else:
+        print("WARNING: No env_kwargs_json_path provided.")
+        print(
+            "The evaluation will use default camera settings, which may not match your trained policy!"
+        )
+
+    ### Create and connect the real robot, wrap it to make it interfaceable with ManiSkill sim2real environments ###
+    real_robot = create_real_robot(uid=args.robot_uid)
+    real_robot.connect()
+    real_agent = LeRobotRealAgent(real_robot, calibration_offset=calibration_offset)
+
+    ### Setup the sim environment to make various checks for sim2real alignment and debugging possible ###
+    sim_env = gym.make(args.env_id, **env_kwargs)
     # you can apply most wrappers freely to the sim_env and the real_env will use them as well
     sim_env = FlattenRGBDObservationWrapper(sim_env)
     if args.record_dir is not None:
         # TODO (stao): verify this wrapper works
-        sim_env = RecordEpisode(sim_env, output_dir=args.record_dir, save_trajectory=False, video_fps=sim_env.unwrapped.control_freq)
-    
+        sim_env = RecordEpisode(
+            sim_env,
+            output_dir=args.record_dir,
+            save_trajectory=False,
+            video_fps=sim_env.unwrapped.control_freq,
+        )
+
     # The Sim2RealEnv class uses the sim_env to help make various checks for sim2real alignment (e.g. observation space is the same, cameras are the similar)
     # and will always try its best to apply all wrappers you used on the sim env to the real env as well.
-    real_env = Sim2RealEnv(sim_env=sim_env, agent=real_agent, control_freq=args.control_freq)
+    real_env = Sim2RealEnv(
+        sim_env=sim_env, agent=real_agent, control_freq=args.control_freq
+    )
     # sim_env.print_sim_details()
     sim_obs, _ = sim_env.reset()
     real_obs, _ = real_env.reset()
@@ -111,10 +139,8 @@ def main(args: Args):
             f"{k}: sim_obs shape: {sim_obs[k].shape}, real_obs shape: {real_obs[k].shape}"
         )
 
-    
     ### Safety setups. Close environments/turn off robot upon ctrl+c ###
     setup_safe_exit(sim_env, real_env, real_agent)
-        
 
     ### Load our checkpoint ###
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -126,7 +152,6 @@ def main(args: Args):
         print("No checkpoint provided, using random agent")
     agent.to(device)
 
-    
     ### Visualization setup for debug modes ###
     if args.debug:
         fig = plt.figure()
@@ -137,7 +162,6 @@ def main(args: Args):
         # Disable all default key bindings
         fig.canvas.mpl_disconnect(fig.canvas.manager.key_press_handler_id)
         fig.canvas.manager.key_press_handler_id = None
-
 
         # initialize the plot
         overlaid_imgs, real_imgs, sim_imgs = overlay_envs(sim_env, real_env)
@@ -154,10 +178,19 @@ def main(args: Args):
 
             agent_obs = {k: v.to(device) for k, v in agent_obs.items()}
             action = agent.get_action(agent_obs)
+            # DEBUG: print gripper action (assuming gripper is last dim)
+            action_np = action.cpu().numpy()
+            if action_np.ndim == 2:
+                grip_act = action_np[0][-1]
+            else:
+                grip_act = action_np[-1]
+            print(f"Step {_}: gripper action (rgb policy): {grip_act:.4f}")
             if not args.continuous_eval:
                 input("Press enter to continue to next timestep")
-            real_obs, _, terminated, truncated, info = real_env.step(action.cpu().numpy())
-            
+            real_obs, _, terminated, truncated, info = real_env.step(
+                action.cpu().numpy()
+            )
+
             if args.debug:
                 overlaid_imgs, real_imgs, sim_imgs = overlay_envs(sim_env, real_env)
                 im.set_data(overlaid_imgs)

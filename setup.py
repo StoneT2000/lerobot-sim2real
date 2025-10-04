@@ -10,6 +10,8 @@ setup(
     setup_requires=["setuptools>=62.3.0"],
     install_requires=[
         "mani_skill_nightly",
+        "easyhec>=0.1.3",
+        "lerobot>=0.3.3",
         "tensorboard",
         "wandb"
     ]
