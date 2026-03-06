@@ -50,6 +50,4 @@ Note that depending on what hardware you are using you might need to install add
 
 ## Sim2Real Tutorial
 
-We currently provide a tutorial on how to train a RGB based model controlling an SO100 robot arm in simulation and deploying that zero-shot in the real world to grasp cubes. Follow the tutorial [here](./docs/zero_shot_rgb_sim2real.md). Note while SO101 looks similar to SO100, we have found that there are some key differences that make sim2real fail for SO101, we will updaye this repository once SO101 is modelled correctly.
-
-We are also working on a tutorial showing you how to make your own environments ready for sim2real, stay tuned!
+We currently provide a tutorial on how to train a RGB based model controlling an SO100 robot arm in simulation and deploying that zero-shot in the real world to grasp cubes. Follow the tutorial [here](./docs/zero_shot_rgb_sim2real.md). For those looking for examples with the SO101 please see this repository, which also includes several new tasks and faster training: https://github.com/aalmuzairee/squint
