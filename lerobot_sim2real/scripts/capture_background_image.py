@@ -7,6 +7,7 @@ from mani_skill.envs.sim2real_env import Sim2RealEnv
 import cv2
 import numpy as np
 import tyro
+import os
 from dataclasses import dataclass
 
 @dataclass
@@ -20,7 +21,7 @@ class Args:
 
 
 def main(args: Args):
-    real_robot = create_real_robot(uid="so100")
+    real_robot = create_real_robot(uid="so101")
     real_robot.connect()
     # we don't need to move the robot. We only want to take a picture
     real_robot.bus.disable_torque()
@@ -38,15 +39,22 @@ def main(args: Args):
     # we skip data checks here since we don't want to actually move the robot. 
     # we also modify the default reset function to not move the robot
     real_env = Sim2RealEnv(sim_env=sim_env, agent=real_agent, skip_data_checks=True, real_reset_function=lambda self, seed, options: None)
-    real_obs, _ = real_env.reset()
+    # Create images directory if it doesn't exist
+    images_dir = "lerobot-sim2real/images"
+    os.makedirs(images_dir, exist_ok=True)
     
-    # Convert from RGB to BGR since OpenCV uses BGR
-    rgb_img = real_obs["rgb"].cpu().numpy()[0].astype(np.uint8)
-    bgr_img = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR)
-    
-    # Save the image
-    cv2.imwrite(args.out, bgr_img)
-    print(f"Saved image to {args.out}")
+    # Capture 5 frames
+    for i in range(5):
+        real_obs, _ = real_env.reset()
+        
+        # Convert from RGB to BGR since OpenCV uses BGR
+        rgb_img = real_obs["rgb"].cpu().numpy()[0].astype(np.uint8)
+        bgr_img = cv2.cvtColor(rgb_img, cv2.COLOR_RGB2BGR)
+        
+        # Save the image
+        image_path = os.path.join(images_dir, f"greenscreen_{i+1}.png")
+        cv2.imwrite(image_path, bgr_img)
+        print(f"Saved image {i+1}/5 to {image_path}")
 
     real_env.close()
     sim_env.close()
