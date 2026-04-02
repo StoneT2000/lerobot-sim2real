@@ -29,13 +29,13 @@ def overlay_envs(sim_env, real_env):
     Requires matching ids between the two environments' sensors
     e.g. id=phone_camera sensor in real_env / real_robot config, must have identical id in sim_env
     """
-    real_obs = real_env.get_obs()["sensor_data"]
-    sim_obs = sim_env.get_obs()["sensor_data"]
+    real_obs = real_env.get_wrapper_attr("get_obs")()["sensor_data"]
+    sim_obs = sim_env.get_wrapper_attr("get_obs")()["sensor_data"]
     assert sorted(real_obs.keys()) == sorted(
         sim_obs.keys()
     ), f"real camera names {real_obs.keys()} and sim camera names {sim_obs.keys()} differ"
 
-    overlaid_dict = sim_env.get_obs()["sensor_data"]
+    overlaid_dict = sim_env.get_wrapper_attr("get_obs")()["sensor_data"]
     overlaid_imgs = []
     for name in overlaid_dict:
         real_imgs = real_obs[name]["rgb"][0] / 255
@@ -46,7 +46,7 @@ def overlay_envs(sim_env, real_env):
 
 
 def update_camera(sim_env):
-    global camera_offset, fov_offset, last_frame_time, help_message_printed
+    global camera_offset, target_offset,fov_offset, last_frame_time, help_message_printed
     current_time = time.time()
     delta_time = current_time - last_frame_time
     last_frame_time = current_time
@@ -54,6 +54,7 @@ def update_camera(sim_env):
     # Reset camera position and FOV on backspace
     if "backspace" in active_keys:
         camera_offset = torch.zeros(3, dtype=torch.float32)
+        target_offset = torch.zeros(3, dtype=torch.float32)
         fov_offset = 0.0
 
     # Camera movement mapping based on active keys
@@ -70,43 +71,63 @@ def update_camera(sim_env):
     if "down" in active_keys:
         camera_offset[2] -= MOVEMENT_SPEED * delta_time  # Move down
 
+    # Camera target movement mapping
+    if "i" in active_keys:
+        target_offset[0] -= TARGET_SPEED * delta_time  # Move target forward
+    if "k" in active_keys:
+        target_offset[0] += TARGET_SPEED * delta_time  # Move target back
+    if "l" in active_keys:
+        target_offset[1] += TARGET_SPEED * delta_time  # Move target right
+    if "j" in active_keys:
+        target_offset[1] -= TARGET_SPEED * delta_time  # Move target left
+    if "u" in active_keys:
+        target_offset[2] += TARGET_SPEED * delta_time  # Move target up
+    if "o" in active_keys:
+        target_offset[2] -= TARGET_SPEED * delta_time  # Move target down
+
     # FOV control
     if "left" in active_keys:
         fov_offset -= FOV_CHANGE_SPEED * delta_time
     if "right" in active_keys:
         fov_offset += FOV_CHANGE_SPEED * delta_time
 
-    # update camera position and fov
-    pos = sim_env.unwrapped.base_camera_settings["pos"] + camera_offset
-    pose = sapien_utils.look_at(pos, sim_env.unwrapped.base_camera_settings["target"])
+    # update target and camera position and fov
+    base_pos = torch.as_tensor(sim_env.unwrapped.base_camera_settings["pos"], dtype=torch.float32)
+    base_target = torch.as_tensor(sim_env.unwrapped.base_camera_settings["target"], dtype=torch.float32)
+    base_fov = float(sim_env.unwrapped.base_camera_settings["fov"])
+
+    pos = base_pos + camera_offset
+    target = base_target + target_offset
+    fov = base_fov + fov_offset
+
+    pose = sapien_utils.look_at(pos, target)
     sim_env.unwrapped.camera_mount.set_pose(pose)
-    sim_env.unwrapped._sensors["base_camera"].camera.set_fovy(
-        sim_env.unwrapped.base_camera_settings["fov"] + fov_offset
-    )
+    sim_env.unwrapped._sensors["base_camera"].camera.set_fovy(fov)
+
 
     if len(active_keys) > 0:
-        print("current_camera_position", pose.p)
-        print(
-            "current_camera_fov",
-            sim_env.unwrapped.base_camera_settings["fov"] + fov_offset,
-        )
-        help_message_printed = False  # Reset the flag when there's movement
-    elif (
-        not help_message_printed
-    ):  # Only print help message if it hasn't been printed yet
+        print("current_camera_position", pos.tolist())
+        print("current_camera_target", target.tolist())
+        print("current_camera_fov", fov)
+        help_message_printed = False
+    elif not help_message_printed:
         print("=== Commands for controlling sim camera ===")
         print(
-            "press: (w), (a) to move in x, (s), (d) to move in y, (up), (down) to move in z, (left), (right) to change fov of simulation camera"
+            "position: w/s -> x, a/d -> y, up/down -> z; "
+            "target: i/k -> x, j/l -> y, u/o -> z; "
+            "fov: left/right"
         )
         print("press: (backspace) to reset, close figure to exit")
         print()
         help_message_printed = True
 
 camera_offset = torch.zeros(3, dtype=torch.float32)
+target_offset = torch.zeros(3, dtype=torch.float32)
 fov_offset = 0.0
 active_keys = set()
 last_frame_time = time.time()
 MOVEMENT_SPEED = 0.1  # units per second
+TARGET_SPEED = 0.1  # units per second
 FOV_CHANGE_SPEED = 0.1  # radians per second
 help_message_printed = False  # Flag to track if we've printed the help message
 
