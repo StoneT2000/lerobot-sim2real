@@ -4,7 +4,7 @@ LeRobot Sim2real provides code to train with Reinforcement Learning in fast GPU 
 
 https://github.com/user-attachments/assets/ca20d10e-d722-48fe-94af-f57e0b2b2fcd
 
-Note that this project is still in a very early stage. There are many ways the sim2real can be improved (like more system ID tools, better reward functions etc.), but we plan to keep this repo extremely simple for readability and hackability.
+There are many ways the sim2real can be improved (like more system ID tools, better reward functions etc.), but we plan to keep this repo extremely simple for readability and hackability. I also strongly recommend users to consider reproducing this project instead: https://github.com/aalmuzairee/squint, which is based on this repository with better performance and sim2real transfer.
 
 If you find this project useful, give this repo and [ManiSkill](https://github.com/haosulab/ManiSkill) a star! If you are using [SO100](https://github.com/TheRobotStudio/SO-ARM100/)/[LeRobot](https://github.com/huggingface/lerobot), make sure to also give them a star. If you use ManiSkill / this sim2real codebase in your research, please cite our [research paper](https://arxiv.org/abs/2410.00425):
 
