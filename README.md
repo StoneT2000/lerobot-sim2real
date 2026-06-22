@@ -39,11 +39,7 @@ Then we install lerobot which enable ease of use with all kinds of hardware.
 
 ```bash
 git clone https://github.com/huggingface/lerobot.git
-cd lerobot
-# note that the code was based on a slightly older lerobot commit. LeRobot recently changed the location of a few files we import so it broke some imports
-# latest LeRobot can work but some LeRobot import paths need to be updated
-git reset --hard a989c795587d122299275c65a38ffdd0a804b8dc
-pip install -e .
+cd lerobot && pip install -e .
 ```
 
 Note that depending on what hardware you are using you might need to install additional packages in LeRobot. If you already installed lerobot somewhere else you can use that instead of running the command above.
